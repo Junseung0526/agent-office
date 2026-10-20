@@ -254,6 +254,7 @@
       if (card.className !== expectedClass) {
         card.className = expectedClass;
       }
+      card.setAttribute('aria-selected', isActive ? 'true' : 'false');
       const engineUpper = (p.engine || 'local').toUpperCase();
       const newInnerHtml = `
           <div class="floor-card-top">
@@ -277,6 +278,17 @@
       const listContainer = document.getElementById('floorsList');
       if (!listContainer) return;
 
+      if (!projects || projects.length === 0) {
+        listContainer.innerHTML = `
+          <div style="padding:20px 12px; text-align:center; color:#64748b; font-size:11px; line-height:1.5;">
+            <div style="font-size:22px; margin-bottom:8px;">🏢</div>
+            <div style="font-weight:700; color:#94a3b8; margin-bottom:4px;">감지된 세션 없음</div>
+            <div>Claude Code 또는 Antigravity CLI 세션을 실행하면 자동으로 층이 생성됩니다.</div>
+          </div>
+        `;
+        return;
+      }
+
       const activeKeys = new Set();
 
       // 프로젝트 목록: server.js에서 이미 최고층 내림차순으로 정렬됨!
@@ -299,6 +311,20 @@
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               selectProject(pKey);
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              const prev = card.previousElementSibling;
+              if (prev && prev.getAttribute('role') === 'button') {
+                prev.focus();
+                prev.click();
+              }
+            } else if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              const next = card.nextElementSibling;
+              if (next && next.getAttribute('role') === 'button') {
+                next.focus();
+                next.click();
+              }
             }
           };
           floorCardElements.set(pKey, card);
@@ -334,8 +360,40 @@
       }
     }
 
+    function renderProjectLogs(pKey) {
+      const feed = document.getElementById('eventLogFeed');
+      if (!feed) return;
+      feed.innerHTML = '';
+      const logs = (Office.projectLogsMap && Office.projectLogsMap.get(pKey)) || [];
+      if (logs.length === 0) {
+        const item = document.createElement('div');
+        item.className = 'log-item';
+        item.innerHTML = `<span class="log-time">${new Date().toTimeString().split(' ')[0]}</span><span class="log-tag">[READY]</span><span class="log-msg">이 층의 새로운 에이전트 이벤트를 대기하고 있습니다.</span>`;
+        feed.appendChild(item);
+        return;
+      }
+      for (const ev of logs) {
+        appendLog(ev, false);
+      }
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function resetStatusDisplayToIdle() {
+      const badge = document.getElementById('agentStateBadge');
+      const detail = document.getElementById('agentStatusDetail');
+      if (badge) {
+        badge.className = 'state-badge state-IDLE';
+        badge.innerText = '대기 중 (IDLE)';
+      }
+      if (detail) {
+        detail.innerText = '에이전트가 새로운 도구 호출이나 질문을 대기하고 있습니다.';
+      }
+    }
+
     function selectProject(pKey) {
       activeProjectKey = pKey;
+      Office.activeProjectKey = pKey;
+      window.activeProjectKey = pKey;
       playSound('ding');
 
       // 해당 층 선택 시 미확인 질문 뱃지 제거
@@ -354,13 +412,30 @@
         updateTokenMeterDisplay(null);
       }
 
+      // 층 변경 시 해당 층의 최근 이벤트 로그 피드 렌더링
+      renderProjectLogs(pKey);
+
+      // 층 변경 시 해당 층의 상태 표시 갱신
+      const lastEv = Office.projectLastEventMap ? Office.projectLastEventMap.get(pKey) : null;
+      if (lastEv) {
+        updateStatusDisplay(lastEv);
+      } else {
+        resetStatusDisplayToIdle();
+      }
+
       updateFloorsList(projectsList);
+
+      const activeCard = floorCardElements.get(pKey);
+      if (activeCard && typeof activeCard.scrollIntoView === 'function') {
+        activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     }
 
     function updateStatusDisplay(ev) {
       const badge = document.getElementById('agentStateBadge');
       const detail = document.getElementById('agentStatusDetail');
-      badge.className = `state-badge state-${ev.action.toUpperCase()}`;
+      if (!badge || !detail || !ev) return;
+      badge.className = `state-badge state-${(ev.action || 'IDLE').toUpperCase()}`;
 
       if (ev.action === 'thinking') {
         badge.innerText = '생각 중 (THINKING)';
@@ -393,11 +468,19 @@
         badge.innerText = '업무 보고 & 퇴근';
         badge.className = 'state-badge state-REPORTING';
         detail.innerText = `보고서: ${ev.resultSummary || '업무 완료'}`;
+      } else if (ev.action === 'user_input') {
+        badge.innerText = '사용자 입력 (INPUT)';
+        badge.className = 'state-badge state-IDLE';
+        detail.innerText = `입력 수신: ${ev.userPrompt || '새로운 지시'}`;
       }
     }
 
-    function appendLog(ev) {
+    function appendLog(ev, smartScroll = true) {
       const feed = document.getElementById('eventLogFeed');
+      if (!feed || !ev) return;
+
+      const isScrolledToBottom = (feed.scrollHeight - feed.scrollTop - feed.clientHeight) < 40;
+
       const item = document.createElement('div');
       item.className = 'log-item';
       if (ev.isError) item.classList.add('error');
@@ -405,7 +488,7 @@
       if (ev.action === 'ask_user') item.classList.add('ask');
       if (ev.action === 'turn_finish') item.classList.add('done');
 
-      const timeStr = new Date().toTimeString().split(' ')[0];
+      const timeStr = ev.timestamp ? new Date(ev.timestamp).toTimeString().split(' ')[0] : new Date().toTimeString().split(' ')[0];
       const tagStr = `[${(ev.action || 'EVENT').toUpperCase()}]`;
       const detailObj = (ev.action === 'tool_start') ? extractTaskDetail(ev.room || 'research', ev.toolName, ev.toolArgs, ev.toolSummary) : null;
       const msgStr = detailObj ? `${detailObj.prefix}${detailObj.text}` : (ev.toolSummary || ev.thinkingText || ev.questionText || ev.resultSummary || ev.userPrompt || '이벤트');
@@ -426,8 +509,12 @@
       item.appendChild(tagSpan);
       item.appendChild(msgSpan);
       feed.appendChild(item);
-      feed.scrollTop = feed.scrollHeight;
+
       while (feed.children.length > 80) feed.removeChild(feed.firstChild);
+
+      if (!smartScroll || isScrolledToBottom) {
+        feed.scrollTop = feed.scrollHeight;
+      }
     }
 
 
@@ -437,6 +524,8 @@
     updateFloorsList,
     selectProject,
     updateStatusDisplay,
+    renderProjectLogs,
+    resetStatusDisplayToIdle,
     appendLog
   });
 
@@ -445,6 +534,8 @@
   window.updateFloorsList = updateFloorsList;
   window.selectProject = selectProject;
   window.updateStatusDisplay = updateStatusDisplay;
+  window.renderProjectLogs = renderProjectLogs;
+  window.resetStatusDisplayToIdle = resetStatusDisplayToIdle;
   window.appendLog = appendLog;
 
 })(window);

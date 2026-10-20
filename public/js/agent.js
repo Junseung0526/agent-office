@@ -297,4 +297,39 @@
   Office.PixelAgent = PixelAgent;
   window.PixelAgent = PixelAgent;
 
+  // 프로젝트별 에이전트 분리 맵 (Floor별 독립 에이전트 인스턴스 관리)
+  const projectAgentsMap = new Map();
+
+  function getProjectAgents(pKey) {
+    const key = pKey || Office.activeProjectKey || 'default';
+    if (!projectAgentsMap.has(key)) {
+      const map = new Map();
+      const mainAg = new PixelAgent('main', '메인 에이전트', 'main');
+      map.set('main', mainAg);
+      projectAgentsMap.set(key, map);
+    }
+    return projectAgentsMap.get(key);
+  }
+
+  Office.projectAgentsMap = projectAgentsMap;
+  Office.getProjectAgents = getProjectAgents;
+  window.getProjectAgents = getProjectAgents;
+
+  Object.defineProperty(Office, 'agentsMap', {
+    get() { return getProjectAgents(Office.activeProjectKey); },
+    set(v) {
+      if (Office.activeProjectKey) {
+        projectAgentsMap.set(Office.activeProjectKey, v);
+      }
+    },
+    configurable: true
+  });
+  if (!Object.prototype.hasOwnProperty.call(window, 'agentsMap')) {
+    Object.defineProperty(window, 'agentsMap', {
+      get() { return Office.agentsMap; },
+      set(v) { Office.agentsMap = v; },
+      configurable: true
+    });
+  }
+
 })(window);

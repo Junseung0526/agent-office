@@ -12,17 +12,25 @@
     // D. 오디오 신디사이저 (Web Audio API)
     // ----------------------------------------------------
     let soundEnabled = true;
+    let hasUserInteracted = false;
+    try {
+      soundEnabled = localStorage.getItem('agent_office_sound_enabled') !== 'false';
+    } catch (e) {
+      soundEnabled = true;
+    }
     let audioCtx = null;
 
     function initAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
     }
 
     function playSound(type) {
-      if (!soundEnabled) return;
+      if (!soundEnabled || !hasUserInteracted) return;
       try {
         initAudio();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
+        if (audioCtx.state === 'suspended') return;
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.connect(gain);
@@ -76,22 +84,62 @@
       } catch (e) {}
     }
 
-    document.getElementById('btnToggleSound').addEventListener('click', () => {
-      soundEnabled = !soundEnabled;
-      document.getElementById('soundIcon').innerText = soundEnabled ? '🔊' : '🔇';
-      document.getElementById('btnToggleSound').innerHTML = soundEnabled ? '<span>🔊</span> 효과음 켜짐' : '<span>🔇</span> 효과음 꺼짐';
-      if (soundEnabled) playSound('ding');
-    });
+    function updateSoundButtonUI() {
+      const btn = document.getElementById('btnToggleSound');
+      if (!btn) return;
+      const icon = document.getElementById('soundIcon');
+      const text = btn.querySelector('.btn-sound-text');
+      if (icon) icon.innerText = soundEnabled ? '🔊' : '🔇';
+      if (text) text.innerText = soundEnabled ? '효과음 켜짐' : '효과음 꺼짐';
+      btn.style.borderColor = soundEnabled ? '#38bdf8' : '#2d3b63';
+      btn.setAttribute('aria-pressed', soundEnabled ? 'true' : 'false');
+      btn.title = `8-bit 레트로 사운드 (${soundEnabled ? '켜짐' : '꺼짐'})`;
+    }
+
+    const btnSound = document.getElementById('btnToggleSound');
+    if (btnSound) {
+      btnSound.addEventListener('click', () => {
+        hasUserInteracted = true;
+        soundEnabled = !soundEnabled;
+        try {
+          localStorage.setItem('agent_office_sound_enabled', soundEnabled ? 'true' : 'false');
+        } catch (e) {}
+        updateSoundButtonUI();
+        if (soundEnabled) playSound('ding');
+      });
+      updateSoundButtonUI();
+    }
+
+    function unlockAudioOnGesture() {
+      hasUserInteracted = true;
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+    }
+    window.addEventListener('click', unlockAudioOnGesture, { passive: true });
+    window.addEventListener('keydown', unlockAudioOnGesture, { passive: true });
+    window.addEventListener('touchstart', unlockAudioOnGesture, { passive: true });
 
 
-  Object.assign(Office, {
-    get soundEnabled() { return soundEnabled; },
-    set soundEnabled(v) { soundEnabled = v; },
-    initAudio,
-    playSound
+  Object.defineProperty(Office, 'soundEnabled', {
+    get() { return soundEnabled; },
+    set(v) {
+      soundEnabled = v;
+      try { localStorage.setItem('agent_office_sound_enabled', soundEnabled ? 'true' : 'false'); } catch (e) {}
+      updateSoundButtonUI();
+    },
+    configurable: true
   });
+  if (!Object.prototype.hasOwnProperty.call(window, 'soundEnabled')) {
+    Object.defineProperty(window, 'soundEnabled', {
+      get() { return Office.soundEnabled; },
+      set(v) { Office.soundEnabled = v; },
+      configurable: true
+    });
+  }
 
-  window.soundEnabled = soundEnabled;
+  Office.initAudio = initAudio;
+  Office.playSound = playSound;
   window.initAudio = initAudio;
   window.playSound = playSound;
 

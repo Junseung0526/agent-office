@@ -47,8 +47,17 @@ const server = http.createServer((req, res) => {
   }
 
   // 4) API 라우팅
+  if (decodedPath === '/favicon.ico') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   if (decodedPath === '/api/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate'
+    });
     res.end(JSON.stringify({
       app: config.APP_NAME,
       version: config.APP_VERSION,
@@ -71,7 +80,10 @@ const server = http.createServer((req, res) => {
 
   if (decodedPath === '/api/projects' || decodedPath === '/api/sessions') {
     const projectsList = buildProjectsList();
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate'
+    });
     res.end(JSON.stringify(maskSecrets(projectsList)));
     return;
   }

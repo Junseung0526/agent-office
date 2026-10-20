@@ -29,14 +29,16 @@
     // 기본값은 null(비용 미표시). 모델별 단가를 채워 넣으면 그때만 예상 비용을 자동 계산합니다.
     // ----------------------------------------------------
     const TOKEN_PRICE_CONFIG = {
-      // 기본값(null): 단가 입력 전에는 토큰 숫자만 표시
       default: null,
-
-      // 필요 시 아래 예시처럼 모델별 1M 토큰당 가격(USD)을 설정할 수 있습니다:
-      // 'claude-3-7-sonnet': { inputPerM: 3.0, outputPerM: 15.0, cacheReadPerM: 0.3 },
-      // 'claude-3-5-sonnet': { inputPerM: 3.0, outputPerM: 15.0, cacheReadPerM: 0.3 },
-      // 'claude-3-5-haiku':  { inputPerM: 0.8, outputPerM: 4.0,  cacheReadPerM: 0.08 },
-      // 'gemini-2.5-pro':    { inputPerM: 1.25, outputPerM: 5.0, cacheReadPerM: 0.3125 }
+      'claude-3-7-sonnet': { inputPerM: 3.0, outputPerM: 15.0, cacheReadPerM: 0.3 },
+      'claude-3-5-sonnet': { inputPerM: 3.0, outputPerM: 15.0, cacheReadPerM: 0.3 },
+      'claude-3-5-haiku':  { inputPerM: 0.8, outputPerM: 4.0,  cacheReadPerM: 0.08 },
+      'claude-3-opus':     { inputPerM: 15.0, outputPerM: 75.0, cacheReadPerM: 1.5 },
+      'gemini-2.5-pro':    { inputPerM: 1.25, outputPerM: 5.0, cacheReadPerM: 0.3125 },
+      'gemini-2.5-flash':  { inputPerM: 0.15, outputPerM: 0.6, cacheReadPerM: 0.0375 },
+      'gemini-2.0-flash':  { inputPerM: 0.10, outputPerM: 0.4, cacheReadPerM: 0.025 },
+      'gpt-4o':            { inputPerM: 2.5,  outputPerM: 10.0, cacheReadPerM: 1.25 },
+      'gpt-4o-mini':       { inputPerM: 0.15, outputPerM: 0.6, cacheReadPerM: 0.075 }
     };
 
     function calculateEstimatedCost(usage, modelName) {
