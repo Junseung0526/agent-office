@@ -79,7 +79,10 @@
             <div class="banner-session-id" id="currentSessionSubtitle">세션 로딩...</div>
           </div>
         </div>
-        <div>
+        <div class="banner-right">
+          <button type="button" class="btn-banner-action" id="btnExportReport" title="현재 세션 업무 마크다운 보고서 복사">
+            <span>📋</span> <span class="btn-action-text">리포트 복사</span>
+          </button>
           <span class="floor-engine-tag" id="currentEngineTag">ACTIVE LOG</span>
         </div>
       </div>
@@ -199,6 +202,9 @@
       </div>
     </div>
   </div>
+
+  <!-- 알림 토스트 컨테이너 -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
   <!-- ===================================================
        2. 픽셀아트 렌더링 & 스프라이트 베이킹 엔진

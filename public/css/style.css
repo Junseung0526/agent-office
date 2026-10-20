@@ -454,6 +454,82 @@
       color: #64748b;
     }
 
+    .banner-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .btn-banner-action {
+      background: #1a2238;
+      border: 1px solid #2d3b63;
+      color: var(--text-main);
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+    .btn-banner-action:hover {
+      background: #253152;
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+    .btn-banner-action.btn-copied {
+      background: #064e3b !important;
+      border-color: #10b981 !important;
+      color: #a7f3d0 !important;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+    }
+    .btn-banner-action.crt-active {
+      background: #1e1b4b !important;
+      border-color: #818cf8 !important;
+      color: #c7d2fe !important;
+      box-shadow: 0 0 8px rgba(129, 140, 248, 0.4);
+    }
+
+    /* 알림 토스트 (Cyberpunk Glassmorphism) */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 99999;
+      pointer-events: none;
+    }
+    .toast-message {
+      pointer-events: auto;
+      background: rgba(16, 24, 39, 0.95);
+      backdrop-filter: blur(8px);
+      border: 1px solid #38bdf8;
+      color: #f1f5f9;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5), 0 0 12px rgba(56, 189, 248, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      animation: toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .toast-message.toast-leaving {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(12px) scale(0.95); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
     /* 캔버스 영역 */
     .canvas-wrapper {
       position: relative;
@@ -1165,8 +1241,13 @@
         min-width: 40px;
         font-size: 11px;
       }
-      .btn-sound-text {
+      .btn-sound-text, .btn-action-text {
         display: none;
+      }
+      .btn-banner-action {
+        padding: 4px 6px;
+        min-height: 28px;
+        font-size: 11px;
       }
       .current-floor-banner {
         padding: 4px 8px;

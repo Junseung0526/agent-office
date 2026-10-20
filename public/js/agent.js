@@ -18,10 +18,11 @@
     // F. 캐릭터 클래스 (오프스크린 스프라이트 Blitting & 상태머신)
     // ----------------------------------------------------
     class PixelAgent {
-      constructor(id, role, type = 'main') {
+      constructor(id, role, type = 'main', engine = 'antigravity') {
         this.id = id;
         this.role = role || '메인 에이전트';
         this.type = type; // 'main' | 'sub'
+        this.engine = engine; // 'antigravity' | 'claude'
 
         this.x = ROOM_DEFS.meeting.targetX;
         this.y = FLOOR_Y;
@@ -168,7 +169,12 @@
       drawPixels(ctx) {
         if (this.state === 'GONE') return;
 
-        const prefix = this.type === 'sub' ? 'sub_' : 'main_';
+        let prefix = 'antigravity_';
+        if (this.type === 'sub') {
+          prefix = 'sub_';
+        } else if (this.engine === 'claude') {
+          prefix = 'claude_';
+        }
         let frameKey = `${prefix}idle0`;
 
         if (this.state === 'WALKING' || this.state === 'LEAVING') {
@@ -304,9 +310,20 @@
     const key = pKey || Office.activeProjectKey || 'default';
     if (!projectAgentsMap.has(key)) {
       const map = new Map();
-      const mainAg = new PixelAgent('main', '메인 에이전트', 'main');
+      const p = (Office.projectsList || []).find(x => x.projectKey === key);
+      const engine = (p && p.engine) ? p.engine.toLowerCase() : 'antigravity';
+      const mainAg = new PixelAgent('main', '메인 에이전트', 'main', engine);
       map.set('main', mainAg);
       projectAgentsMap.set(key, map);
+    } else {
+      // 프로젝트 목록 로드 후 엔진 정보가 업데이트되었으면 반영
+      const p = (Office.projectsList || []).find(x => x.projectKey === key);
+      if (p && p.engine) {
+        const ag = projectAgentsMap.get(key).get('main');
+        if (ag && ag.engine !== p.engine.toLowerCase()) {
+          ag.engine = p.engine.toLowerCase();
+        }
+      }
     }
     return projectAgentsMap.get(key);
   }

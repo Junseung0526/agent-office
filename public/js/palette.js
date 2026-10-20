@@ -171,12 +171,16 @@
     // F : 신발
     // W : 흰색 보고서/손
     // R : 빨강(에러/식은땀)
-    const CHAR_COLOR_DEFAULT = {
+    const CHAR_COLOR_ANTIGRAVITY = {
       'H': 1, 'S': 12, 'E': 0, 'B': 23, 'T': 14, 'P': 4, 'F': 1, 'W': 7, 'R': 14
     };
-    const CHAR_COLOR_SUB = {
-      'H': 8, 'S': 12, 'E': 0, 'B': 16, 'T': 17, 'P': 3, 'F': 1, 'W': 7, 'R': 14
+    const CHAR_COLOR_CLAUDE = {
+      'H': 8, 'S': 12, 'E': 0, 'B': 16, 'T': 26, 'P': 30, 'F': 1, 'W': 7, 'R': 14
     };
+    const CHAR_COLOR_SUB = {
+      'H': 8, 'S': 12, 'E': 0, 'B': 27, 'T': 17, 'P': 3, 'F': 1, 'W': 7, 'R': 14
+    };
+    const CHAR_COLOR_DEFAULT = CHAR_COLOR_ANTIGRAVITY;
 
 
   // Office 네임스페이스 및 전역 노출
@@ -190,6 +194,8 @@
     createBakedCanvas,
     bakePixelGrid,
     CHAR_COLOR_DEFAULT,
+    CHAR_COLOR_ANTIGRAVITY,
+    CHAR_COLOR_CLAUDE,
     CHAR_COLOR_SUB
   });
 
@@ -202,6 +208,8 @@
   window.createBakedCanvas = createBakedCanvas;
   window.bakePixelGrid = bakePixelGrid;
   window.CHAR_COLOR_DEFAULT = CHAR_COLOR_DEFAULT;
+  window.CHAR_COLOR_ANTIGRAVITY = CHAR_COLOR_ANTIGRAVITY;
+  window.CHAR_COLOR_CLAUDE = CHAR_COLOR_CLAUDE;
   window.CHAR_COLOR_SUB = CHAR_COLOR_SUB;
 
 })(window);

@@ -217,16 +217,42 @@
         "...FFFF..FFFF..."
       ];
 
-      // 베이킹 등록 (기본 & 서브에이전트)
-      SPRITE_FRAMES['main_idle0'] = bakePixelGrid(idle0, CHAR_COLOR_DEFAULT);
-      SPRITE_FRAMES['main_idle1'] = bakePixelGrid(idle1, CHAR_COLOR_DEFAULT);
-      SPRITE_FRAMES['main_walk0'] = bakePixelGrid(walk0, CHAR_COLOR_DEFAULT);
-      SPRITE_FRAMES['main_walk1'] = bakePixelGrid(walk1, CHAR_COLOR_DEFAULT);
-      SPRITE_FRAMES['main_walk2'] = bakePixelGrid(walk2, CHAR_COLOR_DEFAULT);
-      SPRITE_FRAMES['main_walk3'] = bakePixelGrid(walk3, CHAR_COLOR_DEFAULT);
-      SPRITE_FRAMES['main_ponder'] = bakePixelGrid(ponder, CHAR_COLOR_DEFAULT);
-      SPRITE_FRAMES['main_sweat'] = bakePixelGrid(sweat, CHAR_COLOR_DEFAULT);
-      SPRITE_FRAMES['main_report'] = bakePixelGrid(report, CHAR_COLOR_DEFAULT);
+      // 베이킹 등록 (기본 & 서브에이전트 & 엔진별 고유 외형)
+      const colorAG = Office.CHAR_COLOR_ANTIGRAVITY || CHAR_COLOR_DEFAULT;
+      const colorClaude = Office.CHAR_COLOR_CLAUDE || CHAR_COLOR_DEFAULT;
+
+      // Antigravity 에이전트 (사이언 블루 랩코트 & 네이비)
+      SPRITE_FRAMES['antigravity_idle0'] = bakePixelGrid(idle0, colorAG);
+      SPRITE_FRAMES['antigravity_idle1'] = bakePixelGrid(idle1, colorAG);
+      SPRITE_FRAMES['antigravity_walk0'] = bakePixelGrid(walk0, colorAG);
+      SPRITE_FRAMES['antigravity_walk1'] = bakePixelGrid(walk1, colorAG);
+      SPRITE_FRAMES['antigravity_walk2'] = bakePixelGrid(walk2, colorAG);
+      SPRITE_FRAMES['antigravity_walk3'] = bakePixelGrid(walk3, colorAG);
+      SPRITE_FRAMES['antigravity_ponder'] = bakePixelGrid(ponder, colorAG);
+      SPRITE_FRAMES['antigravity_sweat'] = bakePixelGrid(sweat, colorAG);
+      SPRITE_FRAMES['antigravity_report'] = bakePixelGrid(report, colorAG);
+
+      // Claude Code 에이전트 (앤트로픽 웜 테라코타 오렌지 & 퍼플 타이)
+      SPRITE_FRAMES['claude_idle0'] = bakePixelGrid(idle0, colorClaude);
+      SPRITE_FRAMES['claude_idle1'] = bakePixelGrid(idle1, colorClaude);
+      SPRITE_FRAMES['claude_walk0'] = bakePixelGrid(walk0, colorClaude);
+      SPRITE_FRAMES['claude_walk1'] = bakePixelGrid(walk1, colorClaude);
+      SPRITE_FRAMES['claude_walk2'] = bakePixelGrid(walk2, colorClaude);
+      SPRITE_FRAMES['claude_walk3'] = bakePixelGrid(walk3, colorClaude);
+      SPRITE_FRAMES['claude_ponder'] = bakePixelGrid(ponder, colorClaude);
+      SPRITE_FRAMES['claude_sweat'] = bakePixelGrid(sweat, colorClaude);
+      SPRITE_FRAMES['claude_report'] = bakePixelGrid(report, colorClaude);
+
+      // 기본 main_ 폴백 호환성
+      SPRITE_FRAMES['main_idle0'] = SPRITE_FRAMES['antigravity_idle0'];
+      SPRITE_FRAMES['main_idle1'] = SPRITE_FRAMES['antigravity_idle1'];
+      SPRITE_FRAMES['main_walk0'] = SPRITE_FRAMES['antigravity_walk0'];
+      SPRITE_FRAMES['main_walk1'] = SPRITE_FRAMES['antigravity_walk1'];
+      SPRITE_FRAMES['main_walk2'] = SPRITE_FRAMES['antigravity_walk2'];
+      SPRITE_FRAMES['main_walk3'] = SPRITE_FRAMES['antigravity_walk3'];
+      SPRITE_FRAMES['main_ponder'] = SPRITE_FRAMES['antigravity_ponder'];
+      SPRITE_FRAMES['main_sweat'] = SPRITE_FRAMES['antigravity_sweat'];
+      SPRITE_FRAMES['main_report'] = SPRITE_FRAMES['antigravity_report'];
 
       SPRITE_FRAMES['sub_idle0'] = bakePixelGrid(idle0, CHAR_COLOR_SUB);
       SPRITE_FRAMES['sub_idle1'] = bakePixelGrid(idle1, CHAR_COLOR_SUB);

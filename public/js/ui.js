@@ -816,8 +816,145 @@
       });
     }
 
+    // 세션 마크다운 업무 리포트 1-Click 클립보드 복사
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const toast = document.createElement('div');
+      toast.className = `toast-message toast-${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('toast-leaving');
+        setTimeout(() => {
+          if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 300);
+      }, 2800);
+    }
+
+    function exportSessionMarkdownReport() {
+      const pKey = Office.activeProjectKey;
+      const project = (Office.projectsList || []).find(p => p.projectKey === pKey);
+      const now = new Date();
+      const timeStr = now.toLocaleString('ko-KR', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+      });
+
+      const projName = project ? project.projectName : (document.getElementById('currentProjectTitle')?.innerText || 'Unknown');
+      const floor = project ? `${project.floor}F` : (document.getElementById('currentFloorTag')?.innerText || '-');
+      const cwd = project ? (project.cwd || '-') : '-';
+      const engine = project ? (project.engine || 'LOCAL').toUpperCase() : 'LOCAL';
+      const sessionId = (project && project.sessions && project.sessions[0]) ? project.sessions[0].sessionId : '-';
+
+      const stateBadge = document.getElementById('agentStateBadge')?.innerText || '대기 중';
+      const stateDetail = document.getElementById('agentStatusDetail')?.innerText || '작업 대기 중';
+
+      const model = document.getElementById('tokenModelBadge')?.innerText || '-';
+      const inTok = document.getElementById('tokenInputVal')?.innerText || '0';
+      const outTok = document.getElementById('tokenOutputVal')?.innerText || '0';
+      const cacheTok = document.getElementById('tokenCacheVal')?.innerText || '0';
+      const totalTok = document.getElementById('tokenTotalVal')?.innerText || '0';
+      const cost = document.getElementById('tokenCostVal')?.innerText || '-';
+
+      let report = `# 🏢 에이전트 오피스 (Agent Office) - 업무 세션 보고서\n\n`;
+      report += `> 생성 일시: ${timeStr}\n\n`;
+      report += `### 📌 프로젝트 개요\n`;
+      report += `- **프로젝트명**: ${projName}\n`;
+      report += `- **위치**: ${floor}\n`;
+      report += `- **실행 엔진**: ${engine}\n`;
+      report += `- **작업 경로**: \`${cwd}\`\n`;
+      report += `- **세션 ID**: \`${sessionId}\`\n\n`;
+
+      report += `### 📊 에이전트 상태\n`;
+      report += `- **상태**: ${stateBadge}\n`;
+      report += `- **상세 활동**: ${stateDetail}\n\n`;
+
+      report += `### 🪙 리소스 및 토큰 사용량\n`;
+      report += `- **사용 모델**: \`${model}\`\n`;
+      report += `- **입력 토큰 (Prompt)**: ${inTok}\n`;
+      report += `- **출력 토큰 (Completion)**: ${outTok}\n`;
+      report += `- **캐시 토큰 (Cache)**: ${cacheTok}\n`;
+      report += `- **총 토큰 합계**: ${totalTok}\n`;
+      if (cost !== '-') {
+        report += `- **예상 비용**: ${cost}\n`;
+      }
+      report += `\n`;
+
+      report += `### 🏛️ 각 룸별 최근 수행 작업\n`;
+      const roomNames = {
+        dev: '개발실 (코드 편집/생성)',
+        server: '서버실 (명령어/터미널)',
+        research: '정보검색실 (웹/문서 탐색)',
+        archive: '자료실 (파일 인덱싱)',
+        meeting: '회의실 (상태 브리핑)',
+        user_desk: '사용자 데스크 (인터뷰/질문)',
+        elevator: '엘리베이터 (세션 진입)'
+      };
+
+      const roomStates = Office.roomTaskStates || {};
+      let hasRoomData = false;
+      for (const [rId, name] of Object.entries(roomNames)) {
+        const st = roomStates[rId];
+        if (st && (st.taskText || st.currentSummary || (st.history && st.history.length > 0))) {
+          hasRoomData = true;
+          report += `#### ${name}\n`;
+          if (st.currentSummary) {
+            report += `- **현재/최근 작업**: ${st.currentSummary}\n`;
+          }
+          if (st.currentTool) {
+            report += `- **실행 도구**: \`${st.currentTool}\`\n`;
+          }
+          if (st.history && st.history.length > 0) {
+            report += `- **최근 작업 이력** (${st.history.length}건):\n`;
+            st.history.slice(-5).forEach(h => {
+              report += `  - [${h.time}] \`${h.tool}\` ${h.summary || ''}\n`;
+            });
+          }
+          report += `\n`;
+        }
+      }
+
+      if (!hasRoomData) {
+        report += `*(기록된 룸 작업 내역이 없습니다)*\n\n`;
+      }
+
+      report += `---\n*Generated automatically by Agent Office Workstation*\n`;
+
+      navigator.clipboard.writeText(report).then(() => {
+        const btn = document.getElementById('btnExportReport');
+        if (btn) {
+          btn.classList.add('btn-copied');
+          const origHtml = btn.innerHTML;
+          btn.innerHTML = `<span>✅</span> <span class="btn-action-text">복사 완료!</span>`;
+          setTimeout(() => {
+            btn.classList.remove('btn-copied');
+            btn.innerHTML = origHtml;
+          }, 2500);
+        }
+        showToast('📋 세션 마크다운 업무 보고서가 클립보드에 복사되었습니다!', 'success');
+        if (Office.playSound) Office.playSound('report');
+      }).catch(err => {
+        console.error('Failed to copy report:', err);
+        showToast('❌ 클립보드 복사 권한 오류가 발생했습니다.', 'error');
+      });
+    }
+
+    function initReportExport() {
+      const btn = document.getElementById('btnExportReport');
+      if (btn) {
+        btn.onclick = exportSessionMarkdownReport;
+        btn.addEventListener('click', exportSessionMarkdownReport);
+      }
+    }
+
+    initReportExport();
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initSearchAndFilter);
+      document.addEventListener('DOMContentLoaded', () => {
+        initSearchAndFilter();
+        initReportExport();
+      });
     } else {
       initSearchAndFilter();
     }
@@ -834,7 +971,9 @@
     updateHotJumpBanner,
     openRoomInspector,
     closeRoomInspector,
-    appendLog
+    appendLog,
+    showToast,
+    exportSessionMarkdownReport
   });
 
   window.updateTokenMeterDisplay = updateTokenMeterDisplay;
@@ -848,5 +987,7 @@
   window.openRoomInspector = openRoomInspector;
   window.closeRoomInspector = closeRoomInspector;
   window.appendLog = appendLog;
+  window.showToast = showToast;
+  window.exportSessionMarkdownReport = exportSessionMarkdownReport;
 
 })(window);
