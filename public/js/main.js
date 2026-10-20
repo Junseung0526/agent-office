@@ -132,6 +132,8 @@
         bgHex = '#2d1502'; borderHex = '#f59e0b'; textHex = '#fffbeb';
       } else if (bubble.type === 'error') {
         bgHex = '#300808'; borderHex = '#ef4444'; textHex = '#fef2f2';
+      } else if (bubble.type === 'meme') {
+        bgHex = '#271033'; borderHex = '#ec4899'; textHex = '#fdf2f8';
       }
 
       const x = Math.max(10, Math.min(950 - bw, Math.round(bx - bw / 2)));

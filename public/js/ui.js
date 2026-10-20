@@ -866,7 +866,23 @@
         canvas.addEventListener('click', (e) => {
           const rect = canvas.getBoundingClientRect();
           const scaleX = 480 / rect.width;
+          const scaleY = 270 / rect.height;
           const clickX = (e.clientX - rect.left) * scaleX;
+          const clickY = (e.clientY - rect.top) * scaleY;
+
+          // 캐릭터 직접 클릭 감지 (반경 18px x 24px) -> 재미있는 밈 대사 즉시 출력
+          const currentAgents = Office.getProjectAgents ? Office.getProjectAgents(Office.activeProjectKey) : null;
+          if (currentAgents) {
+            for (const [_, ag] of currentAgents.entries()) {
+              if (ag.state !== 'GONE' && Math.abs(ag.x - clickX) <= 18 && Math.abs(ag.y - 12 - clickY) <= 24) {
+                if (typeof ag.sayRandomMeme === 'function') {
+                  ag.sayRandomMeme();
+                  return;
+                }
+              }
+            }
+          }
+
           const { ROOM_DEFS } = Office;
           if (!ROOM_DEFS) return;
           for (const rId in ROOM_DEFS) {
