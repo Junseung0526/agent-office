@@ -1,0 +1,6 @@
+.DS_Store
+*/.DS_Store
+.playwright-mcp/
+.run/*.pid
+.run/*.png
+.cache/

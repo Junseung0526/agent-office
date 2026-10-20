@@ -790,7 +790,7 @@
       if (currentProjectTokenUsage && currentProjectTokenUsage.hasData) {
         const deskX = (410 + 12 + 28) * 2;
         const deskY = (FLOOR_Y - 32 + 5) * 2;
-        const tokenBadgeText = '🪙 ' + formatCompactTokenCount(currentProjectTokenUsage.totalTokens);
+        const tokenBadgeText = 'TOK ' + formatCompactTokenCount(currentProjectTokenUsage.totalTokens);
         drawBadgeLabel(ctx, deskX, deskY, tokenBadgeText, {
           bg: '#1c1917',
           border: '#f59e0b',

@@ -89,9 +89,13 @@
       if (!btn) return;
       const icon = document.getElementById('soundIcon');
       const text = btn.querySelector('.btn-sound-text');
-      if (icon) icon.innerText = soundEnabled ? '🔊' : '🔇';
+      if (icon) {
+        icon.innerHTML = soundEnabled
+          ? '<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>'
+          : '<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>';
+      }
       if (text) text.innerText = soundEnabled ? '효과음 켜짐' : '효과음 꺼짐';
-      btn.style.borderColor = soundEnabled ? '#38bdf8' : '#2d3b63';
+      btn.style.borderColor = soundEnabled ? 'rgba(56, 189, 248, 0.4)' : 'rgba(255, 255, 255, 0.08)';
       btn.setAttribute('aria-pressed', soundEnabled ? 'true' : 'false');
       btn.title = `8-bit 레트로 사운드 (${soundEnabled ? '켜짐' : '꺼짐'})`;
     }

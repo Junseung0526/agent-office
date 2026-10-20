@@ -3,34 +3,49 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>에이전트 오피스 (Agent Office) - 픽셀아트 AI 사무실 대시보드</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
+  <title>Agent Office — Autonomous Agent Workstation</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23090a0f'/><rect x='2' y='2' width='28' height='28' rx='5' fill='none' stroke='%2338bdf8' stroke-width='1.5'/><polyline points='9 16 14 21 23 11' fill='none' stroke='%2338bdf8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/></svg>">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-  <!-- 상단 헤더 -->
+  <!-- 상단 네비게이션 헤더 -->
   <header>
     <div class="header-logo">
-      <span>🏢</span>
-      <span>에이전트 오피스 (Agent Office)</span>
+      <div class="header-logo-icon">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="3"></rect>
+          <path d="M3 9h18"></path>
+          <path d="M9 21V9"></path>
+        </svg>
+      </div>
+      <span class="header-logo-text">AGENT OFFICE</span>
+      <span class="header-version-tag">STUDIO</span>
     </div>
     <div class="header-info">
       <!-- 응답 필요 층 퀵 점프 핫키 배너 (백그라운드 질문 발생 시 자동 노출) -->
-      <button type="button" id="hotJumpBanner" class="hot-jump-banner" style="display:none;" title="응답 대기 층으로 즉시 이동">
-        <span class="hot-jump-pulse">❓</span>
-        <span id="hotJumpText">응답 필요</span>
-        <span class="hot-jump-action">이동 ➔</span>
+      <button type="button" id="hotJumpBanner" class="hot-jump-banner" style="display:none;" title="응답 대기 층으로 즉시 이동 (단축키: Tab)">
+        <span class="hot-jump-pulse">
+          <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        </span>
+        <span id="hotJumpText">AWAITING INPUT</span>
+        <span class="hot-jump-action">JUMP ➔</span>
       </button>
-      <div class="status-badge">
+      <div class="status-badge" title="0.25s 증분 세션 로그 스트림 감시 활성">
         <span class="status-dot"></span>
-        <span id="sseStatusText">0.25s 증분 감시 활성</span>
+        <span id="sseStatusText">LIVE TELEMETRY (0.25s)</span>
       </div>
-      <button class="btn-sound" id="btnToggleSound" title="8-bit 레트로 사운드 토글">
-        <span id="soundIcon">🔊</span> <span class="btn-sound-text">효과음 켜짐</span>
+      <button class="btn-sound" id="btnToggleSound" title="8-bit 사운드 토글">
+        <span id="soundIcon">
+          <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+        </span>
+        <span class="btn-sound-text">효과음</span>
       </button>
       <button class="btn-sound" id="btnToggleNotify" title="데스크톱 브라우저 알림 (응답 필요/완료/에러)">
-        <span id="notifyIcon">🔔</span> <span class="btn-sound-text" id="notifyText">알림 켜짐</span>
+        <span id="notifyIcon">
+          <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+        </span>
+        <span class="btn-sound-text" id="notifyText">알림</span>
       </button>
     </div>
   </header>
@@ -38,16 +53,22 @@
   <!-- 메인 레이아웃 -->
   <div class="main-layout">
     
-    <!-- 좌측/상단: 백화점 층별 안내판 (최고층이 맨 위/첫번째) -->
+    <!-- 좌측/상단: 워크스페이스 층별 안내판 -->
     <aside class="floor-guide-panel">
       <div class="guide-header">
-        <span>FLOOR GUIDE</span>
-        <span>최고층 ➔ 1F</span>
+        <div class="guide-header-title">
+          <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          <span>WORKSPACES</span>
+        </div>
+        <span class="guide-sub">FLOOR DIRECTORY</span>
       </div>
       <!-- 층 검색 및 상태 필터 칩 바 -->
       <div class="floor-filter-toolbar">
         <div class="floor-search-box">
-          <input type="text" id="floorSearchInput" placeholder="🔍 검색 (단축키: /)" aria-label="프로젝트/경로 검색">
+          <span class="floor-search-icon">
+            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </span>
+          <input type="text" id="floorSearchInput" placeholder="워크스페이스 검색... (/)" aria-label="프로젝트/경로 검색">
           <button type="button" id="floorSearchClear" class="btn-search-clear" title="검색어 초기화" style="display:none;">✕</button>
         </div>
         <div class="floor-filter-chips">
@@ -58,7 +79,7 @@
             <span class="chip-dot dot-working"></span>작업 중 <span class="chip-count" id="countWorking">0</span>
           </button>
           <button type="button" class="filter-chip" data-filter="question" id="filterQuestion">
-            <span class="chip-dot dot-question">❓</span>응답 필요 <span class="chip-count" id="countQuestion">0</span>
+            <span class="chip-dot dot-question"></span>응답 필요 <span class="chip-count" id="countQuestion">0</span>
           </button>
         </div>
       </div>
@@ -74,17 +95,19 @@
       <div class="current-floor-banner">
         <div class="banner-left">
           <span class="banner-floor-tag" id="currentFloorTag">최고층</span>
-          <div style="min-width:0;">
+          <div class="banner-title-wrap">
             <div class="banner-project-title" id="currentProjectTitle">프로젝트 탐색 중...</div>
             <div class="banner-session-id" id="currentSessionSubtitle">세션 로딩...</div>
           </div>
         </div>
         <div class="banner-right">
           <button type="button" class="btn-banner-action" id="btnExportReport" title="현재 세션 업무 마크다운 보고서 복사">
-            <span>📋</span> <span class="btn-action-text">리포트 복사</span>
+            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            <span class="btn-action-text">Export MD</span>
           </button>
           <button type="button" class="btn-banner-action" id="btnToggleCrt" title="레트로 CRT 스캔라인 화면 모드 토글">
-            <span id="crtIcon">📺</span> <span class="btn-action-text" id="crtStatusText">CRT OFF</span>
+            <svg id="crtIcon" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            <span class="btn-action-text" id="crtStatusText">CRT FX</span>
           </button>
           <span class="floor-engine-tag" id="currentEngineTag">ACTIVE LOG</span>
         </div>
@@ -101,12 +124,13 @@
       <!-- 하단 상태 패널 -->
       <footer class="bottom-panel" id="bottomPanel">
         <div class="controls-row">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span style="font-weight:700; color:#38bdf8; font-size:11px;">● LIVE STREAM</span>
-            <span style="color:#64748b; font-size:11px;">실시간 에이전트 활동 추적 중 (0.25s 증분 감시)</span>
+          <div class="live-stream-header-left">
+            <span class="live-stream-dot"></span>
+            <span class="live-stream-title">LIVE TELEMETRY STREAM</span>
+            <span class="live-stream-desc">0.25s 증분 세션 추적 활성</span>
           </div>
-          <div>
-            <span style="font-size:10.5px; color:#64748b;">960×540 HD Canvas · 60FPS</span>
+          <div class="live-stream-header-right">
+            <span class="canvas-spec-label">HD 960×540 · 60 FPS</span>
           </div>
         </div>
 
@@ -114,16 +138,19 @@
           <!-- 상태 요약 (모바일 접이식) -->
           <div class="status-summary-box">
             <button type="button" class="panel-section-toggle" aria-expanded="true" aria-controls="statusSummaryContent">
-              <span>📊 AGENT STATE</span>
+              <span class="panel-toggle-title">
+                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+                AGENT STATE
+              </span>
               <span class="toggle-arrow">▼</span>
             </button>
             <div class="panel-section-content" id="statusSummaryContent">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <span style="font-weight:700; font-size:10px; color:#94a3b8;">AGENT STATE</span>
+              <div class="agent-state-top">
+                <span class="section-micro-label">AGENT STATE</span>
                 <span class="state-badge state-IDLE" id="agentStateBadge">대기 중</span>
               </div>
               <div class="summary-text-box" id="agentStatusDetail">
-                에이전트가 새로운 도구 호출이나 질문을 대기하고 있습니다.
+                에이전트가 새로운 도구 호출이나 지시를 대기하고 있습니다.
               </div>
             </div>
           </div>
@@ -131,12 +158,18 @@
           <!-- 세션별 토큰 사용량 미터 (사용량 정보가 있을 때만 노출, 모바일 접이식) -->
           <div class="token-meter-box" id="tokenMeterBox" style="display: none;">
             <button type="button" class="panel-section-toggle" aria-expanded="true" aria-controls="tokenMeterContent">
-              <span>🪙 TOKEN USAGE</span>
+              <span class="panel-toggle-title">
+                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M14.8 9A2 2 0 0 0 13 8h-2a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4h-2a2 2 0 0 1-1.8-1"></path><path d="M12 6v2"></path><path d="M12 16v2"></path></svg>
+                TOKEN METRICS
+              </span>
               <span class="toggle-arrow">▼</span>
             </button>
             <div class="panel-section-content" id="tokenMeterContent">
               <div class="token-meter-header">
-                <span class="token-meter-title">🪙 TOKEN USAGE</span>
+                <span class="token-meter-title">
+                  <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M14.8 9A2 2 0 0 0 13 8h-2a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4h-2a2 2 0 0 1-1.8-1"></path><path d="M12 6v2"></path><path d="M12 16v2"></path></svg>
+                  TOKEN METRICS
+                </span>
                 <span class="token-model-badge" id="tokenModelBadge">-</span>
               </div>
               <div class="token-grid">
@@ -163,7 +196,10 @@
               </div>
               <div class="token-sparkline-row" id="tokenSparklineRow" style="display: none;">
                 <div class="sparkline-header">
-                  <span class="sparkline-label">📈 BURN RATE</span>
+                  <span class="sparkline-label">
+                    <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                    BURN RATE
+                  </span>
                   <span class="sparkline-rate" id="tokenBurnRateVal">0 tok/s</span>
                 </div>
                 <canvas id="tokenSparkline" width="160" height="28"></canvas>
@@ -174,7 +210,10 @@
           <!-- 실시간 이벤트 피드 (모바일 접이식) -->
           <div class="log-feed-box-wrapper">
             <button type="button" class="panel-section-toggle" aria-expanded="true" aria-controls="eventLogFeed">
-              <span>📜 LIVE EVENT FEED</span>
+              <span class="panel-toggle-title">
+                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                EVENT STREAM
+              </span>
               <span class="toggle-arrow">▼</span>
             </button>
             <div class="panel-section-content" id="eventLogFeedContent">
@@ -182,7 +221,7 @@
                 <div class="log-item">
                   <span class="log-time">00:00:00</span>
                   <span class="log-tag">[SYSTEM]</span>
-                  <span class="log-msg">에이전트 오피스 픽셀 대시보드가 준비되었습니다.</span>
+                  <span class="log-msg">에이전트 오피스 워크스테이션이 준비되었습니다.</span>
                 </div>
               </div>
             </div>
@@ -195,17 +234,19 @@
   </div>
 
   <!-- ===================================================
-       방/에이전트 인터랙티브 인스펙터 모달 (사이버펑크 글래스모피즘)
+       방/에이전트 인터랙티브 인스펙터 모달 (Developer Inspector)
        =================================================== -->
   <div id="roomInspectorModal" class="inspector-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="inspectorTitle">
     <div class="inspector-backdrop" id="inspectorBackdrop"></div>
     <div class="inspector-dialog">
       <div class="inspector-header">
         <div class="inspector-title-wrap">
-          <span class="inspector-icon" id="inspectorIcon">💻</span>
+          <span class="inspector-icon" id="inspectorIcon">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </span>
           <div>
             <h3 class="inspector-title" id="inspectorTitle">개발실 상세 인스펙터</h3>
-            <div class="inspector-subtitle" id="inspectorSubtitle">38F Workspace-d37f60de</div>
+            <div class="inspector-subtitle" id="inspectorSubtitle">Workspace Inspector</div>
           </div>
         </div>
         <button type="button" class="btn-inspector-close" id="btnInspectorClose" title="닫기 (Esc)">✕</button>
@@ -220,9 +261,8 @@
   <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
   <!-- ===================================================
-       2. 픽셀아트 렌더링 & 스프라이트 베이킹 엔진
+       모듈화된 프론트엔드 자바스크립트 엔진
        =================================================== -->
-    <!-- 모듈화된 프론트엔드 자바스크립트 엔진 -->
   <script src="js/palette.js"></script>
   <script src="js/sprites.js"></script>
   <script src="js/sound.js"></script>

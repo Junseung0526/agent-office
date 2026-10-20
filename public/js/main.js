@@ -351,12 +351,12 @@
           statusDot.style.boxShadow = connected ? '0 0 8px #10b981' : '0 0 8px #f59e0b';
         }
         if (sseStatusText) {
-          sseStatusText.innerText = message || (connected ? '0.25s 증분 감시 활성' : '서버 재연결 중...');
+          sseStatusText.innerText = message || (connected ? 'LIVE (0.25s)' : 'RECONNECTING...');
         }
       }
 
       evt.onopen = () => {
-        setConnectionState(true, '0.25s 증분 감시 활성');
+        setConnectionState(true, 'LIVE (0.25s)');
         // 재연결 시 프로젝트 목록 즉시 동기화
         fetch('/api/projects')
           .then(res => res.json())

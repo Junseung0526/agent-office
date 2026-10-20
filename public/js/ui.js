@@ -217,15 +217,14 @@
         const btn = document.getElementById('btnToggleNotify');
         const icon = document.getElementById('notifyIcon');
         const text = document.getElementById('notifyText');
-        if (this.enabled && window.Notification && Notification.permission === 'granted') {
-          icon.innerText = '🔔';
-          text.innerText = '알림 켜짐';
-          btn.style.borderColor = '#38bdf8';
-        } else {
-          icon.innerText = '🔕';
-          text.innerText = '알림 꺼짐';
-          btn.style.borderColor = '#2d3b63';
+        const isGranted = this.enabled && window.Notification && Notification.permission === 'granted';
+        if (icon) {
+          icon.innerHTML = isGranted
+            ? '<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>'
+            : '<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"></path><path d="M18.63 13A17.89 17.89 0 0 1 18 8"></path><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"></path><path d="M18 8a6 6 0 0 0-9.33-5"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
         }
+        if (text) text.innerText = isGranted ? '알림 켜짐' : '알림 꺼짐';
+        if (btn) btn.style.borderColor = isGranted ? 'rgba(56, 189, 248, 0.4)' : 'rgba(255, 255, 255, 0.08)';
       },
 
       handleEvent(ev) {
@@ -253,9 +252,9 @@
             if (count === 3) {
               this.triggerAlert({
                 type: 'error',
-                title: `🚨 [${pName}] 도구 연속 3회 실패!`,
+                title: `[${pName}] 도구 연속 3회 오류`,
                 body: ev.errorSummary || '작업 중 오류가 3번 연속 발생했습니다.',
-                blinkText: '🚨 연속 에러 발생!'
+                blinkText: '[ERROR] 연속 에러 발생'
               });
             }
           } else {
@@ -273,9 +272,9 @@
           }
           this.triggerAlert({
             type: 'ask',
-            title: `❓ [${pName}] 내 응답 필요`,
+            title: `[${pName}] 내 응답 필요`,
             body: ev.questionText || '에이전트가 질문을 보냈습니다.',
-            blinkText: '❓ 응답 필요!'
+            blinkText: '[INPUT] 응답 필요'
           });
         }
 
@@ -289,9 +288,9 @@
           }
           this.triggerAlert({
             type: 'finish',
-            title: `✅ [${pName}] 작업 완료`,
+            title: `[${pName}] 작업 완료`,
             body: ev.resultSummary || '에이전트가 업무를 마무리했습니다.',
-            blinkText: '✅ 작업 완료!'
+            blinkText: '[DONE] 작업 완료'
           });
         }
 
@@ -408,7 +407,7 @@
             <div class="floor-badge">
               <span class="floor-indicator"></span>
               <span>${escapeHtml(p.floor)}F</span>
-              ${hasUnread ? '<span class="floor-badge-alert" title="내 응답 필요!">❓</span>' : ''}
+              ${hasUnread ? '<span class="floor-badge-alert" title="내 응답 필요!"><svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>' : ''}
             </div>
             <span class="floor-engine-tag">${escapeHtml(engineUpper)}</span>
           </div>
@@ -472,7 +471,7 @@
       if (NotificationManager.unreadQuestionFloors.has(activeProjectKey)) {
         const p = (projectsList || []).find(x => x.projectKey === activeProjectKey);
         const floorStr = p ? `${p.floor}F ` : '';
-        text.innerText = `❓ ${floorStr}내 응답 필요 (대기 중)`;
+        text.innerText = `${floorStr}내 응답 필요 (대기 중)`;
         banner.style.display = 'inline-flex';
         banner.onclick = () => {
           const detail = document.getElementById('agentStatusDetail');
@@ -509,10 +508,10 @@
 
       if (!projects || projects.length === 0) {
         listContainer.innerHTML = `
-          <div style="padding:20px 12px; text-align:center; color:#64748b; font-size:11px; line-height:1.5;">
-            <div style="font-size:22px; margin-bottom:8px;">🏢</div>
-            <div style="font-weight:700; color:#94a3b8; margin-bottom:4px;">감지된 세션 없음</div>
-            <div>Claude Code 또는 Antigravity CLI 세션을 실행하면 자동으로 층이 생성됩니다.</div>
+          <div style="padding:28px 12px; text-align:center; color:#64748b; font-size:11px; line-height:1.5;">
+            <svg viewBox="0 0 24 24" width="28" height="28" stroke="#475569" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:8px;"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="9" y1="22" x2="9" y2="22.01"></line><line x1="15" y1="22" x2="15" y2="22.01"></line><line x1="9" y1="6" x2="9.01" y2="6"></line><line x1="15" y1="6" x2="15.01" y2="6"></line><line x1="9" y1="10" x2="9.01" y2="10"></line><line x1="15" y1="10" x2="15.01" y2="10"></line><line x1="9" y1="14" x2="9.01" y2="14"></line><line x1="15" y1="14" x2="15.01" y2="14"></line><line x1="9" y1="18" x2="9.01" y2="18"></line><line x1="15" y1="18" x2="15.01" y2="18"></line></svg>
+            <div style="font-weight:700; color:#94a3b8; margin-bottom:4px;">감지된 활성 세션 없음</div>
+            <div>Claude Code 또는 Antigravity CLI 세션을 실행하면 자동으로 워크스페이스가 감지됩니다.</div>
           </div>
         `;
         return;
@@ -522,9 +521,9 @@
 
       if (visibleProjects.length === 0) {
         listContainer.innerHTML = `
-          <div style="padding:20px 12px; text-align:center; color:#64748b; font-size:11px; line-height:1.5;">
-            <div style="font-size:18px; margin-bottom:6px;">🔍</div>
-            <div style="font-weight:700; color:#94a3b8; margin-bottom:4px;">일치하는 층이 없습니다</div>
+          <div style="padding:28px 12px; text-align:center; color:#64748b; font-size:11px; line-height:1.5;">
+            <svg viewBox="0 0 24 24" width="24" height="24" stroke="#475569" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <div style="font-weight:700; color:#94a3b8; margin-bottom:4px;">일치하는 워크스페이스 없음</div>
             <div>검색어나 필터 조건을 변경해보세요.</div>
           </div>
         `;
@@ -703,15 +702,15 @@
           detail.innerText = `결과 도착: ${ev.resultSummary || '정상 완료'}`;
         }
       } else if (ev.action === 'ask_user') {
-        badge.innerText = '❓ 내 응답 필요 (ASK)';
+        badge.innerText = '응답 필요 (ASK)';
         badge.className = 'state-badge state-ASKING';
         detail.innerText = `질문: ${ev.questionText || '사용자 의견을 확인하고 있습니다.'}`;
       } else if (ev.action === 'subagent_spawn') {
-        badge.innerText = '서브에이전트 출근';
+        badge.innerText = '서브에이전트 배치';
         badge.className = 'state-badge state-WORKING';
         detail.innerText = `팀원 출근: ${ev.subagentName} (${ev.subagentRole})`;
       } else if (ev.action === 'turn_finish') {
-        badge.innerText = '💬 업무 완료 (응답 대기)';
+        badge.innerText = '업무 완료 (AWAITING)';
         badge.className = 'state-badge state-ASKING';
         detail.innerText = `보고서: ${ev.resultSummary || '업무가 완료되었습니다. 다음 지시를 기다립니다.'}`;
       } else if (ev.action === 'user_input') {
@@ -767,13 +766,13 @@
     // 방/에이전트 인터랙티브 인스펙터 모달 (Room Inspector)
     // ----------------------------------------------------
     const ROOM_ICONS = {
-      elevator: '🛗',
-      archive: '📚',
-      dev: '💻',
-      server: '🖥️',
-      research: '🌐',
-      meeting: '📋',
-      user_desk: '🪑'
+      elevator: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="7 10 12 5 17 10"/><polyline points="7 14 12 19 17 14"/></svg>',
+      archive: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+      dev: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+      server: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>',
+      research: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+      meeting: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+      user_desk: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>'
     };
 
     function openRoomInspector(roomId) {
@@ -788,7 +787,10 @@
       const tasks = getProjectTaskStates ? getProjectTaskStates(pKey) : null;
       const rState = tasks ? tasks[roomId] : null;
 
-      document.getElementById('inspectorIcon').innerText = ROOM_ICONS[roomId] || '🏢';
+      const iconEl = document.getElementById('inspectorIcon');
+      if (iconEl) {
+        iconEl.innerHTML = ROOM_ICONS[roomId] || '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>';
+      }
       document.getElementById('inspectorTitle').innerText = `${def.name} 상세 인스펙터`;
       document.getElementById('inspectorSubtitle').innerText = floorStr;
 
@@ -860,7 +862,10 @@
           </div>
           <div class="inspector-section-label" style="margin-top:10px;">
             <span>${escapeHtml(fullTargetLabel)}</span>
-            <button type="button" class="btn-copy-code" id="btnCopyInspectorTarget">📋 복사</button>
+            <button type="button" class="btn-copy-code" id="btnCopyInspectorTarget">
+              <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span>복사</span>
+            </button>
           </div>
           <div class="inspector-code-box" id="inspectorCodeBox">${escapeHtml(fullTarget)}</div>
         </div>
@@ -878,8 +883,10 @@
         btnCopy.addEventListener('click', () => {
           if (navigator.clipboard) {
             navigator.clipboard.writeText(fullTarget).then(() => {
-              btnCopy.innerText = '✅ 복사됨!';
-              setTimeout(() => { btnCopy.innerText = '📋 복사'; }, 1800);
+              btnCopy.innerHTML = '<svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>복사됨</span>';
+              setTimeout(() => {
+                btnCopy.innerHTML = '<svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> <span>복사</span>';
+              }, 1800);
             }).catch(() => {});
           }
         });
@@ -1041,20 +1048,20 @@
       const totalTok = document.getElementById('tokenTotalVal')?.innerText || '0';
       const cost = document.getElementById('tokenCostVal')?.innerText || '-';
 
-      let report = `# 🏢 에이전트 오피스 (Agent Office) - 업무 세션 보고서\n\n`;
+      let report = `# 에이전트 오피스 (Agent Office) - 업무 세션 보고서\n\n`;
       report += `> 생성 일시: ${timeStr}\n\n`;
-      report += `### 📌 프로젝트 개요\n`;
+      report += `### 프로젝트 개요\n`;
       report += `- **프로젝트명**: ${projName}\n`;
       report += `- **위치**: ${floor}\n`;
       report += `- **실행 엔진**: ${engine}\n`;
       report += `- **작업 경로**: \`${cwd}\`\n`;
       report += `- **세션 ID**: \`${sessionId}\`\n\n`;
 
-      report += `### 📊 에이전트 상태\n`;
+      report += `### 에이전트 상태\n`;
       report += `- **상태**: ${stateBadge}\n`;
       report += `- **상세 활동**: ${stateDetail}\n\n`;
 
-      report += `### 🪙 리소스 및 토큰 사용량\n`;
+      report += `### 리소스 및 토큰 사용량\n`;
       report += `- **사용 모델**: \`${model}\`\n`;
       report += `- **입력 토큰 (Prompt)**: ${inTok}\n`;
       report += `- **출력 토큰 (Completion)**: ${outTok}\n`;
@@ -1065,7 +1072,7 @@
       }
       report += `\n`;
 
-      report += `### 🏛️ 각 룸별 최근 수행 작업\n`;
+      report += `### 각 룸별 최근 수행 작업\n`;
       const roomNames = {
         dev: '개발실 (코드 편집/생성)',
         server: '서버실 (명령어/터미널)',
@@ -1110,17 +1117,17 @@
         if (btn) {
           btn.classList.add('btn-copied');
           const origHtml = btn.innerHTML;
-          btn.innerHTML = `<span>✅</span> <span class="btn-action-text">복사 완료!</span>`;
+          btn.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> <span class="btn-action-text">복사 완료</span>`;
           setTimeout(() => {
             btn.classList.remove('btn-copied');
             btn.innerHTML = origHtml;
           }, 2500);
         }
-        showToast('📋 세션 마크다운 업무 보고서가 클립보드에 복사되었습니다!', 'success');
+        showToast('세션 마크다운 업무 보고서가 클립보드에 복사되었습니다.', 'success');
         if (Office.playSound) Office.playSound('report');
       }).catch(err => {
         console.error('Failed to copy report:', err);
-        showToast('❌ 클립보드 복사 권한 오류가 발생했습니다.', 'error');
+        showToast('클립보드 복사 권한 오류가 발생했습니다.', 'error');
       });
     }
 
@@ -1161,7 +1168,7 @@
         localStorage.setItem('agent_office_crt', isCrt ? '1' : '0');
         applyCrt(isCrt);
         if (Office.playSound) Office.playSound('work');
-        showToast(isCrt ? '📺 레트로 CRT 스캔라인 모드가 켜졌습니다.' : '📺 CRT 모드가 해제되었습니다.');
+        showToast(isCrt ? 'CRT 스캔라인 모드가 켜졌습니다.' : 'CRT 모드가 꺼졌습니다.');
       }
 
       btn.onclick = toggleCrt;
@@ -1240,7 +1247,7 @@
           window.updateCanvasBufferSize();
         }
         if (Office.playSound) Office.playSound('ding');
-        showToast('📏 하단 패널 높이가 기본 크기(165px)로 초기화되었습니다.');
+        showToast('하단 패널 높이가 기본 크기(165px)로 초기화되었습니다.');
       });
     }
 
