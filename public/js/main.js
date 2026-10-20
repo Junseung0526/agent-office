@@ -162,7 +162,7 @@
         }
       }
 
-      // 이벤트 대상 프로젝트의 에이전트 맵 조회
+      // 이벤트 대상 프로젝트의 에이전트 맵 조회 (메인 & DevOps 병렬 협업 체제)
       const targetAgents = getProjectAgents(pKey);
       let targetAgent = targetAgents.get(ev.agentId);
       if (!targetAgent) {
@@ -171,7 +171,22 @@
           targetAgent.x = ROOM_DEFS.elevator.targetX;
           targetAgents.set(ev.agentId, targetAgent);
         } else {
-          targetAgent = targetAgents.get('main');
+          // 멀티 에이전트 병렬 협업 동적 분담:
+          // 1) 서버실/터미널/명령어 도구는 ops(DevOps 엔지니어)가 전담 수행
+          // 2) 또는 메인 에이전트가 다른 방에서 작업 중(WORKING)일 때 새 도구가 시작되면 ops가 병렬 지원
+          const mainAg = targetAgents.get('main');
+          const opsAg = targetAgents.get('ops');
+          if (ev.action === 'tool_start') {
+            if (ev.room === 'server' && opsAg) {
+              targetAgent = opsAg;
+            } else if (mainAg && mainAg.state === 'WORKING' && mainAg.currentRoom !== ev.room && opsAg) {
+              targetAgent = opsAg;
+            } else {
+              targetAgent = mainAg;
+            }
+          } else {
+            targetAgent = mainAg;
+          }
         }
       }
 
@@ -198,6 +213,9 @@
         } else if (ev.action === 'tool_start') {
           // 이전 회의실 사고 작업 완료 처리
           setRoomTaskEnd(pKey, 'meeting');
+          if (typeof NotificationManager !== 'undefined' && NotificationManager.markFloorQuestion) {
+            NotificationManager.markFloorQuestion(pKey, false);
+          }
 
           const targetRoom = ev.room || 'research';
           const toolKey = ev.toolUseId || ev.id || `${ev.toolName || 'tool'}_${Date.now()}`;
@@ -247,13 +265,17 @@
             if (targetAgent.activeTools.size > 0) {
               targetAgent.state = 'WORKING';
             } else {
-              // 모든 도구가 완료된 경우에만 IDLE로 복귀
-              if (targetAgent.state === 'WALKING') {
-                targetAgent.onArrivedAction = 'IDLE';
-                targetAgent.clearSpeech();
+              // DevOps 에이전트는 도구 완료 시 기본적으로 서버실로 복귀하여 모니터링 지속
+              if (targetAgent.id === 'ops') {
+                targetAgent.moveToRoom('server', 'WORKING', { type: 'meme', text: '🖥️ 백그라운드 서버 정상 가동 중', duration: 3500 });
               } else {
-                targetAgent.state = 'IDLE';
-                targetAgent.clearSpeech();
+                if (targetAgent.state === 'WALKING') {
+                  targetAgent.onArrivedAction = 'IDLE';
+                  targetAgent.clearSpeech();
+                } else {
+                  targetAgent.state = 'IDLE';
+                  targetAgent.clearSpeech();
+                }
               }
             }
           }
@@ -261,10 +283,16 @@
           targetAgent.moveToRoom('user_desk', 'ASKING');
           if (!ev.replay && isCurrentFloor) playSound('ding');
           targetAgent.setSpeech('ask', `❓ ${ev.questionText?.slice(0, 28) || '질문'}`);
+          if (typeof NotificationManager !== 'undefined' && NotificationManager.markFloorQuestion) {
+            NotificationManager.markFloorQuestion(pKey, true);
+          }
         } else if (ev.action === 'user_input') {
           // 새 사용자 입력 수신 시 미완료 도구 및 퇴근 상태 정리
           targetAgent.activeTools.clear();
           targetAgent.cancelLeaving();
+          if (typeof NotificationManager !== 'undefined' && NotificationManager.markFloorQuestion) {
+            NotificationManager.markFloorQuestion(pKey, false);
+          }
 
           if (targetAgent.state === 'WALKING') {
             targetAgent.onArrivedAction = 'IDLE';
@@ -293,19 +321,11 @@
           targetAgent.activeTools.clear();
           targetAgent.moveToRoom('user_desk', 'REPORTING');
           if (!ev.replay && isCurrentFloor) playSound('report');
-          targetAgent.setSpeech('report', `📋 ${ev.resultSummary?.slice(0, 28) || '업무 완료'}`);
+          targetAgent.setSpeech('report', `📋 ${ev.resultSummary?.slice(0, 28) || '업무 완료, 다음 지시 대기'}`);
 
-          // 퇴근 예약: 타이머를 targetAgent.leaveTimer에 보관하여 새 이벤트 시 즉시 취소 가능
-          if (!ev.replay) {
-            targetAgent.leaveTimer = setTimeout(() => {
-              targetAgent.leaveTimer = null;
-              if (targetAgent.state === 'REPORTING') {
-                targetAgent.setSpeech('report', '👋 퇴근합니다~');
-                targetAgent.targetX = ROOM_DEFS.elevator.targetX;
-                targetAgent.state = 'LEAVING';
-                targetAgent.facing = -1;
-              }
-            }, 3500);
+          // 응답 대기 상태 활성화 (사용자 지시를 기다리므로 오피스를 퇴근해 비우지 않고 책상에서 대기)
+          if (typeof NotificationManager !== 'undefined' && NotificationManager.markFloorQuestion) {
+            NotificationManager.markFloorQuestion(pKey, true);
           }
         }
       }

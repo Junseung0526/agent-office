@@ -266,7 +266,7 @@
         // 4. 내 응답 필요 (ask_user)
         if (ev.action === 'ask_user') {
           const pKey = ev.projectKey || (ev.cwd ? ev.cwd : null);
-          if (pKey && pKey !== activeProjectKey) {
+          if (pKey) {
             this.unreadQuestionFloors.add(pKey);
             updateFloorsList(projectsList);
             updateHotJumpBanner();
@@ -279,8 +279,14 @@
           });
         }
 
-        // 5. 작업 완료 (turn_finish)
+        // 5. 작업 완료 (turn_finish) -> 사용자 다음 지시/응답 대기 플래그 등록
         if (ev.action === 'turn_finish') {
+          const pKey = ev.projectKey || (ev.cwd ? ev.cwd : null);
+          if (pKey) {
+            this.unreadQuestionFloors.add(pKey);
+            updateFloorsList(projectsList);
+            updateHotJumpBanner();
+          }
           this.triggerAlert({
             type: 'finish',
             title: `✅ [${pName}] 작업 완료`,
@@ -288,6 +294,27 @@
             blinkText: '✅ 작업 완료!'
           });
         }
+
+        // 6. 사용자 입력 수신 (user_input) -> 응답 필요 상태 해제
+        if (ev.action === 'user_input') {
+          const pKey = ev.projectKey || (ev.cwd ? ev.cwd : null);
+          if (pKey) {
+            this.unreadQuestionFloors.delete(pKey);
+            updateFloorsList(projectsList);
+            updateHotJumpBanner();
+          }
+        }
+      },
+
+      markFloorQuestion(pKey, isWaiting) {
+        if (!pKey) return;
+        if (isWaiting) {
+          this.unreadQuestionFloors.add(pKey);
+        } else {
+          this.unreadQuestionFloors.delete(pKey);
+        }
+        updateFloorsList(projectsList);
+        updateHotJumpBanner();
       },
 
       triggerAlert({ type, title, body, blinkText }) {
@@ -441,6 +468,19 @@
         banner.style.display = 'none';
         return;
       }
+      // 현재 보고 있는 층이 응답 대기 상태인 경우
+      if (NotificationManager.unreadQuestionFloors.has(activeProjectKey)) {
+        const p = (projectsList || []).find(x => x.projectKey === activeProjectKey);
+        const floorStr = p ? `${p.floor}F ` : '';
+        text.innerText = `❓ ${floorStr}내 응답 필요 (대기 중)`;
+        banner.style.display = 'inline-flex';
+        banner.onclick = () => {
+          const detail = document.getElementById('agentStatusDetail');
+          if (detail) detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        };
+        return;
+      }
+      // 다른 층이 응답 대기 상태인 경우 빠른 점프 제공
       const firstUnreadKey = NotificationManager.unreadQuestionFloors.values().next().value;
       const p = (projectsList || []).find(x => x.projectKey === firstUnreadKey);
       const floorStr = p ? `${p.floor}F ` : '';
@@ -455,6 +495,14 @@
       projectsList = projects;
       const listContainer = document.getElementById('floorsList');
       if (!listContainer) return;
+
+      if (projects && Array.isArray(projects)) {
+        for (const p of projects) {
+          if (p.isAwaitingUser) {
+            NotificationManager.unreadQuestionFloors.add(p.projectKey);
+          }
+        }
+      }
 
       updateFilterCounts(projects);
       updateHotJumpBanner();
@@ -655,20 +703,20 @@
           detail.innerText = `결과 도착: ${ev.resultSummary || '정상 완료'}`;
         }
       } else if (ev.action === 'ask_user') {
-        badge.innerText = '사용자 질문 (ASK)';
+        badge.innerText = '❓ 내 응답 필요 (ASK)';
         badge.className = 'state-badge state-ASKING';
-        detail.innerText = `질문: ${ev.questionText || '의견을 확인해주세요.'}`;
+        detail.innerText = `질문: ${ev.questionText || '사용자 의견을 확인하고 있습니다.'}`;
       } else if (ev.action === 'subagent_spawn') {
         badge.innerText = '서브에이전트 출근';
         badge.className = 'state-badge state-WORKING';
         detail.innerText = `팀원 출근: ${ev.subagentName} (${ev.subagentRole})`;
       } else if (ev.action === 'turn_finish') {
-        badge.innerText = '업무 보고 & 퇴근';
-        badge.className = 'state-badge state-REPORTING';
-        detail.innerText = `보고서: ${ev.resultSummary || '업무 완료'}`;
+        badge.innerText = '💬 업무 완료 (응답 대기)';
+        badge.className = 'state-badge state-ASKING';
+        detail.innerText = `보고서: ${ev.resultSummary || '업무가 완료되었습니다. 다음 지시를 기다립니다.'}`;
       } else if (ev.action === 'user_input') {
         badge.innerText = '사용자 입력 (INPUT)';
-        badge.className = 'state-badge state-IDLE';
+        badge.className = 'state-badge state-WORKING';
         detail.innerText = `입력 수신: ${ev.userPrompt || '새로운 지시'}`;
       }
     }

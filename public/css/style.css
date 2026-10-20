@@ -734,7 +734,13 @@
     .state-THINKING { background: #5b21b6; color: #d8b4fe; }
     .state-PONDERING { background: #92400e; color: #fde68a; }
     .state-ERROR { background: #991b1b; color: #fca5a5; }
-    .state-ASKING { background: #9f1239; color: #fecdd3; }
+    .state-ASKING {
+      background: #78350f;
+      color: #fef08a;
+      border: 1px solid #f59e0b;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+      animation: pulse-dot 0.9s infinite alternate;
+    }
     .state-REPORTING { background: #115e59; color: #99f6e4; }
 
     .summary-text-box {

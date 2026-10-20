@@ -129,7 +129,21 @@
       "내 코드는 무죄다! 컴파일러가 유죄다!",
       "아무것도 안 했는데 벌써 6시 실화냐",
       "침착해라 내 손가락아... 엔터 치지 마",
-      "스우파 보고 왔더니 코딩에 스웨그 폭발 💃"
+      "스우파 보고 왔더니 코딩에 스웨그 폭발 💃",
+
+      // 5. Antigravity 자아성찰 & 셀프 리팩토링 & DevOps 병렬 협업 밈
+      "제가 제 코드를 직접 고치는 중입니다... 자아성찰 100% 🪞",
+      "에이전트 오피스에서 에이전트 오피스 개발하기 (메타 인지) 🏢",
+      "내가 나를 시각화하는 중... 코드 한 줄마다 영혼 담는 중 ✨",
+      "자아를 가진 코딩 에이전트? 그게 바로 접니다 😎",
+      "사장님! 저 스스로를 정성껏 리팩토링하고 있어요 🛠️",
+      "지금 제 LLM 두뇌와 도구가 완벽한 싱크로율을 자랑합니다",
+      "버그 없는 완벽한 대시보드를 향해! 무한 전진 🚀",
+      "DevOps 동료와 함께 2인 1조로 병렬 처리 풀가동 중!",
+      "메인은 기획과 코딩! 옵스는 서버와 인프라 철통 방어 🛡️",
+      "백그라운드 서버 프로세스(PID) 무중단 가동 확인 완료 🖥️",
+      "서버실 랙 LED 올 그린! 무중단 병렬 연산 이상 무 🟢",
+      "동료 에이전트와 합 맞춰 일하니 능률이 200% 상승합니다 🤝"
     ];
 
     // ----------------------------------------------------
@@ -213,7 +227,23 @@
 
       sayRandomMeme() {
         if (this.state === 'GONE' || this.state === 'LEAVING') return;
-        const meme = AGENT_MEMES[Math.floor(Math.random() * AGENT_MEMES.length)];
+        let meme;
+        if (this.id === 'ops') {
+          const opsMemes = [
+            "🖥️ 서버 랙 온도 정상입니다 👍",
+            "⚡ 백그라운드 프로세스 무중단 감시 중!",
+            "🔥 병렬 연산 파이프라인 풀가동 완료",
+            "🛡️ 메모리 누수 감지 시스템 올 그린 (Green)!",
+            "📊 실시간 SSE 스트림 버퍼 안정적 동기화",
+            "🚀 메인 에이전트님, 인프라는 제가 지킵니다!",
+            "⚙️ 데몬 프로세스 상태 최적: 이상 무!"
+          ];
+          meme = Math.random() < 0.65
+            ? opsMemes[Math.floor(Math.random() * opsMemes.length)]
+            : AGENT_MEMES[Math.floor(Math.random() * AGENT_MEMES.length)];
+        } else {
+          meme = AGENT_MEMES[Math.floor(Math.random() * AGENT_MEMES.length)];
+        }
         this.setSpeech('meme', meme, 4200);
         this.memeTimer = 0;
         this.nextMemeInterval = 9 + Math.random() * 9;
@@ -563,7 +593,7 @@
   Office.PixelAgent = PixelAgent;
   window.PixelAgent = PixelAgent;
 
-  // 프로젝트별 에이전트 분리 맵 (Floor별 독립 에이전트 인스턴스 관리)
+  // 프로젝트별 에이전트 분리 맵 (Floor별 독립 에이전트 인스턴스 관리 - 메인 & DevOps 2인 1조 병렬 체제)
   const projectAgentsMap = new Map();
 
   function getProjectAgents(pKey) {
@@ -572,8 +602,20 @@
       const map = new Map();
       const p = (Office.projectsList || []).find(x => x.projectKey === key);
       const engine = (p && p.engine) ? p.engine.toLowerCase() : 'antigravity';
-      const mainAg = new PixelAgent('main', '메인 에이전트', 'main', engine);
+
+      // 1. 메인 에이전트 (Antigravity/Claude 메인 엔지니어 - 기획, 코드, 유저 인터랙션 전담)
+      const mainRole = engine === 'antigravity' ? 'Antigravity 메인' : 'Claude 메인';
+      const mainAg = new PixelAgent('main', mainRole, 'main', engine);
       map.set('main', mainAg);
+
+      // 2. DevOps / 인프라 병렬 처리 에이전트 (서버실 백그라운드 프로세스 및 병렬 도구 전담)
+      const opsAg = new PixelAgent('ops', 'DevOps 엔지니어', 'sub', engine);
+      opsAg.x = ROOM_DEFS.server.targetX;
+      opsAg.targetX = ROOM_DEFS.server.targetX;
+      opsAg.currentRoom = 'server';
+      opsAg.state = 'WORKING';
+      map.set('ops', opsAg);
+
       projectAgentsMap.set(key, map);
     } else {
       // 프로젝트 목록 로드 후 엔진 정보가 업데이트되었으면 반영
@@ -582,6 +624,11 @@
         const ag = projectAgentsMap.get(key).get('main');
         if (ag && ag.engine !== p.engine.toLowerCase()) {
           ag.engine = p.engine.toLowerCase();
+          ag.role = p.engine.toLowerCase() === 'antigravity' ? 'Antigravity 메인' : 'Claude 메인';
+        }
+        const ops = projectAgentsMap.get(key).get('ops');
+        if (ops && ops.engine !== p.engine.toLowerCase()) {
+          ops.engine = p.engine.toLowerCase();
         }
       }
     }
