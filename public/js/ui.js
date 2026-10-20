@@ -227,32 +227,69 @@
 
     // I. 백화점 층별 안내 사이드바 (최고층이 맨 위!)
     // ----------------------------------------------------
-    function updateFloorsList(projects) {
-      projectsList = projects;
-      const listContainer = document.getElementById('floorsList');
-      listContainer.innerHTML = '';
+    const floorCardElements = new Map();
 
-      // 프로젝트 목록: server.js에서 이미 최고층 내림차순으로 정렬됨!
-      for (const p of projects) {
-        const card = document.createElement('div');
-        const isActive = p.projectKey === activeProjectKey;
-        const hasUnread = NotificationManager.unreadQuestionFloors.has(p.projectKey);
-        card.className = `floor-card ${isActive ? 'active' : ''} ${p.isActive ? 'working' : ''}`;
-        card.onclick = () => selectProject(p.projectKey);
-
-        card.innerHTML = `
+    function renderFloorCard(card, p, isActive, hasUnread) {
+      const expectedClass = `floor-card ${isActive ? 'active' : ''} ${p.isActive ? 'working' : ''}`;
+      if (card.className !== expectedClass) {
+        card.className = expectedClass;
+      }
+      const engineUpper = (p.engine || 'local').toUpperCase();
+      const newInnerHtml = `
           <div class="floor-card-top">
             <div class="floor-badge">
               <span class="floor-indicator"></span>
               <span>${escapeHtml(p.floor)}F</span>
               ${hasUnread ? '<span class="floor-badge-alert" title="내 응답 필요!">❓</span>' : ''}
             </div>
-            <span class="floor-engine-tag">${escapeHtml((p.engine || 'local').toUpperCase())}</span>
+            <span class="floor-engine-tag">${escapeHtml(engineUpper)}</span>
           </div>
           <div class="floor-title">${escapeHtml(p.projectName)}</div>
           <div class="floor-cwd">${escapeHtml(p.cwd)}</div>
         `;
-        listContainer.appendChild(card);
+      if (card.innerHTML !== newInnerHtml) {
+        card.innerHTML = newInnerHtml;
+      }
+    }
+
+    function updateFloorsList(projects) {
+      projectsList = projects;
+      const listContainer = document.getElementById('floorsList');
+      if (!listContainer) return;
+
+      const activeKeys = new Set();
+
+      // 프로젝트 목록: server.js에서 이미 최고층 내림차순으로 정렬됨!
+      // 키 기반 diff: 전체 innerHTML을 날리지 않고 변경된 카드만 갱신하며 DOM 노드 재사용
+      for (let i = 0; i < projects.length; i++) {
+        const p = projects[i];
+        const pKey = p.projectKey;
+        activeKeys.add(pKey);
+
+        const isActive = pKey === activeProjectKey;
+        const hasUnread = NotificationManager.unreadQuestionFloors.has(pKey);
+
+        let card = floorCardElements.get(pKey);
+        if (!card) {
+          card = document.createElement('div');
+          card.onclick = () => selectProject(pKey);
+          floorCardElements.set(pKey, card);
+        }
+
+        renderFloorCard(card, p, isActive, hasUnread);
+
+        const currentChildAtPos = listContainer.children[i];
+        if (currentChildAtPos !== card) {
+          listContainer.insertBefore(card, currentChildAtPos || null);
+        }
+      }
+
+      // 목록에서 사라진 프로젝트 카드 정리
+      for (const [key, card] of floorCardElements.entries()) {
+        if (!activeKeys.has(key)) {
+          card.remove();
+          floorCardElements.delete(key);
+        }
       }
 
       // 첫 접속 시 가장 높은 층(최근 활동 프로젝트) 자동 선택
