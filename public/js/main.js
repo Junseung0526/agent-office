@@ -174,6 +174,9 @@
     for (const [_, ag] of currentAgents.entries()) {
       ag.drawPixels(dotCtx);
     }
+    if (Office.drawAmbientLighting) {
+      Office.drawAmbientLighting(dotCtx);
+    }
 
     ctx.save();
     ctx.imageSmoothingEnabled = false;

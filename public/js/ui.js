@@ -945,15 +945,52 @@
       const btn = document.getElementById('btnExportReport');
       if (btn) {
         btn.onclick = exportSessionMarkdownReport;
-        btn.addEventListener('click', exportSessionMarkdownReport);
       }
     }
 
+    // 레트로 CRT 스캔라인 화면 모드 토글
+    function initCrtMode() {
+      const btn = document.getElementById('btnToggleCrt');
+      const wrapper = document.querySelector('.canvas-wrapper');
+      const crtText = document.getElementById('crtStatusText');
+      if (!btn || !wrapper) return;
+
+      let isCrt = localStorage.getItem('agent_office_crt') === '1';
+
+      function applyCrt(active) {
+        if (active) {
+          wrapper.classList.add('crt-active');
+          btn.classList.add('crt-active');
+          if (crtText) crtText.innerText = 'CRT ON';
+          btn.title = '레트로 CRT 모드 켜짐 (클릭 시 끄기)';
+        } else {
+          wrapper.classList.remove('crt-active');
+          btn.classList.remove('crt-active');
+          if (crtText) crtText.innerText = 'CRT OFF';
+          btn.title = '레트로 CRT 모드 꺼짐 (클릭 시 켜기)';
+        }
+      }
+
+      applyCrt(isCrt);
+
+      function toggleCrt() {
+        isCrt = !isCrt;
+        localStorage.setItem('agent_office_crt', isCrt ? '1' : '0');
+        applyCrt(isCrt);
+        if (Office.playSound) Office.playSound('work');
+        showToast(isCrt ? '📺 레트로 CRT 스캔라인 모드가 켜졌습니다.' : '📺 CRT 모드가 해제되었습니다.');
+      }
+
+      btn.onclick = toggleCrt;
+    }
+
     initReportExport();
+    initCrtMode();
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
         initSearchAndFilter();
         initReportExport();
+        initCrtMode();
       });
     } else {
       initSearchAndFilter();

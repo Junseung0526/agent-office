@@ -801,6 +801,57 @@
       }
     }
 
+    // ----------------------------------------------------
+    // 실시간 24h 조명 사이클 (새벽/주간/일몰/심야 앰비언트 & 나이트 포인트 라이트)
+    // ----------------------------------------------------
+    function drawAmbientLighting(ctx) {
+      const currentHour = getCachedHour();
+
+      // 06:00 ~ 08:59: 새벽 (Dawn) - 은은한 쿨 퍼플/핑크 아침 햇살
+      if (currentHour >= 6 && currentHour < 9) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(168, 85, 247, 0.07)';
+        ctx.fillRect(0, 0, 480, 270);
+        ctx.restore();
+      }
+      // 17:00 ~ 19:59: 일몰 (Sunset/Golden Hour) - 따뜻한 황금빛 앰버 글로우
+      else if (currentHour >= 17 && currentHour < 20) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.10)';
+        ctx.fillRect(0, 0, 480, 270);
+        ctx.restore();
+      }
+      // 20:00 ~ 05:59: 심야 (Night) - 깊은 사이버펑크 미드나잇 틴트 & 룸 포인트 라이트 글로우
+      else if (currentHour >= 20 || currentHour < 6) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(6, 11, 28, 0.28)';
+        ctx.fillRect(0, 0, 480, 270);
+
+        // 포인트 라이트 1: 서버실 랙 네온 블루 글로우 (x=230)
+        const gradServer = ctx.createRadialGradient(230, FLOOR_Y - 25, 4, 230, FLOOR_Y - 25, 42);
+        gradServer.addColorStop(0, 'rgba(56, 189, 248, 0.22)');
+        gradServer.addColorStop(1, 'rgba(56, 189, 248, 0)');
+        ctx.fillStyle = gradServer;
+        ctx.fillRect(180, FLOOR_Y - 65, 100, 75);
+
+        // 포인트 라이트 2: 개발실 모니터 에메랄드 글로우 (x=162)
+        const gradDev = ctx.createRadialGradient(162, FLOOR_Y - 20, 2, 162, FLOOR_Y - 20, 36);
+        gradDev.addColorStop(0, 'rgba(52, 211, 153, 0.18)');
+        gradDev.addColorStop(1, 'rgba(52, 211, 153, 0)');
+        ctx.fillStyle = gradDev;
+        ctx.fillRect(125, FLOOR_Y - 55, 75, 65);
+
+        // 포인트 라이트 3: 사용자 책상 스탠드 조명 (x=440)
+        const gradDesk = ctx.createRadialGradient(442, FLOOR_Y - 22, 2, 442, FLOOR_Y - 22, 38);
+        gradDesk.addColorStop(0, 'rgba(251, 191, 36, 0.22)');
+        gradDesk.addColorStop(1, 'rgba(251, 191, 36, 0)');
+        ctx.fillStyle = gradDesk;
+        ctx.fillRect(400, FLOOR_Y - 60, 80, 70);
+
+        ctx.restore();
+      }
+    }
+
 
   Object.assign(Office, {
     ROOM_DEFS,
@@ -816,6 +867,7 @@
     finishAllRoomTasks,
     dustParticles,
     drawEnvironmentPixels,
+    drawAmbientLighting,
     drawRoomInteriorPixels,
     drawRoomSignLabels,
     drawBadgeLabel,
@@ -837,6 +889,7 @@
   window.finishAllRoomTasks = finishAllRoomTasks;
   window.dustParticles = dustParticles;
   window.drawEnvironmentPixels = drawEnvironmentPixels;
+  window.drawAmbientLighting = drawAmbientLighting;
   window.drawRoomInteriorPixels = drawRoomInteriorPixels;
   window.drawRoomSignLabels = drawRoomSignLabels;
   window.drawBadgeLabel = drawBadgeLabel;
