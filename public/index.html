@@ -179,6 +179,28 @@
   </div>
 
   <!-- ===================================================
+       방/에이전트 인터랙티브 인스펙터 모달 (사이버펑크 글래스모피즘)
+       =================================================== -->
+  <div id="roomInspectorModal" class="inspector-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="inspectorTitle">
+    <div class="inspector-backdrop" id="inspectorBackdrop"></div>
+    <div class="inspector-dialog">
+      <div class="inspector-header">
+        <div class="inspector-title-wrap">
+          <span class="inspector-icon" id="inspectorIcon">💻</span>
+          <div>
+            <h3 class="inspector-title" id="inspectorTitle">개발실 상세 인스펙터</h3>
+            <div class="inspector-subtitle" id="inspectorSubtitle">38F Workspace-d37f60de</div>
+          </div>
+        </div>
+        <button type="button" class="btn-inspector-close" id="btnInspectorClose" title="닫기 (Esc)">✕</button>
+      </div>
+      <div class="inspector-body" id="inspectorBody">
+        <!-- 자바스크립트로 동적 렌더링 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================
        2. 픽셀아트 렌더링 & 스프라이트 베이킹 엔진
        =================================================== -->
     <!-- 모듈화된 프론트엔드 자바스크립트 엔진 -->

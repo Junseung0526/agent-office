@@ -220,6 +220,23 @@
       tasks[roomId].endTime = 0;
       tasks[roomId].opacity = 1;
       tasks[roomId].tickerOffset = 0;
+
+      // 상세 인스펙터용 원본 정보 및 이력 보관
+      tasks[roomId].currentArgs = args;
+      tasks[roomId].currentTool = toolName;
+      tasks[roomId].currentSummary = summary;
+      tasks[roomId].startTime = Date.now();
+
+      if (!tasks[roomId].history) tasks[roomId].history = [];
+      tasks[roomId].history.unshift({
+        toolName,
+        args,
+        summary,
+        detailText: `${detail.prefix}${detail.text}`,
+        time: new Date().toTimeString().split(' ')[0],
+        timestamp: Date.now()
+      });
+      if (tasks[roomId].history.length > 20) tasks[roomId].history.pop();
     }
 
     function setRoomTaskEnd(pKey, roomId) {

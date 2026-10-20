@@ -596,7 +596,177 @@
       }
     }
 
-    // 층 검색 인풋 및 필터 칩 초기화
+    // ----------------------------------------------------
+    // 방/에이전트 인터랙티브 인스펙터 모달 (Room Inspector)
+    // ----------------------------------------------------
+    const ROOM_ICONS = {
+      elevator: '🛗',
+      archive: '📚',
+      dev: '💻',
+      server: '🖥️',
+      research: '🌐',
+      meeting: '📋',
+      user_desk: '🪑'
+    };
+
+    function openRoomInspector(roomId) {
+      const { ROOM_DEFS, getProjectTaskStates } = Office;
+      const modal = document.getElementById('roomInspectorModal');
+      if (!modal || !ROOM_DEFS || !ROOM_DEFS[roomId]) return;
+
+      const pKey = Office.activeProjectKey || 'default';
+      const p = (projectsList || []).find(x => x.projectKey === pKey);
+      const floorStr = p ? `${p.floor}F ${escapeHtml(p.projectName)}` : 'Office Inspector';
+      const def = ROOM_DEFS[roomId];
+      const tasks = getProjectTaskStates ? getProjectTaskStates(pKey) : null;
+      const rState = tasks ? tasks[roomId] : null;
+
+      document.getElementById('inspectorIcon').innerText = ROOM_ICONS[roomId] || '🏢';
+      document.getElementById('inspectorTitle').innerText = `${def.name} 상세 인스펙터`;
+      document.getElementById('inspectorSubtitle').innerText = floorStr;
+
+      let fullTarget = '';
+      let fullTargetLabel = '상세 정보';
+      if (roomId === 'dev') {
+        fullTargetLabel = '수정 중인 파일 전체 경로';
+        if (rState && rState.currentArgs) {
+          fullTarget = rState.currentArgs.Path || rState.currentArgs.file_path || rState.currentArgs.TargetFile || rState.currentArgs.path || rState.text;
+        } else {
+          fullTarget = (rState && rState.text) ? rState.text : '대기 중 (수정된 파일 없음)';
+        }
+      } else if (roomId === 'server') {
+        fullTargetLabel = '실행 명령어 전체';
+        if (rState && rState.currentArgs) {
+          fullTarget = rState.currentArgs.CommandLine || rState.currentArgs.command || rState.currentArgs.cmd || rState.text;
+        } else {
+          fullTarget = (rState && rState.text) ? rState.text : '대기 중 (실행 중인 명령어 없음)';
+        }
+      } else if (roomId === 'archive') {
+        fullTargetLabel = '읽은 파일 경로 / 검색 패턴';
+        if (rState && rState.currentArgs) {
+          fullTarget = rState.currentArgs.Path || rState.currentArgs.file_path || rState.currentArgs.pattern || rState.currentArgs.glob || rState.text;
+        } else {
+          fullTarget = (rState && rState.text) ? rState.text : '대기 중 (검색/참조 내역 없음)';
+        }
+      } else if (roomId === 'research') {
+        fullTargetLabel = '검색 질의어 / MCP 도구명';
+        if (rState && rState.currentArgs) {
+          fullTarget = rState.currentArgs.query || rState.currentArgs.Url || rState.currentArgs.url || rState.currentArgs.ToolName || rState.text;
+        } else {
+          fullTarget = (rState && rState.text) ? rState.text : '대기 중 (검색 활동 없음)';
+        }
+      } else if (roomId === 'meeting') {
+        fullTargetLabel = '에이전트 실시간 사고 (Thinking)';
+        fullTarget = (rState && rState.history && rState.history[0]?.detailText) || '회의 및 종합 계획 대기 중';
+      } else if (roomId === 'user_desk') {
+        fullTargetLabel = '사용자 질문 및 인터랙션';
+        fullTarget = (rState && rState.history && rState.history[0]?.detailText) || '새로운 질문 대기 중';
+      } else {
+        fullTargetLabel = '상태';
+        fullTarget = '서브에이전트 위임 및 프로세스 출퇴근 통로';
+      }
+
+      const isActive = rState && rState.active;
+      const historyList = (rState && rState.history) || [];
+
+      let historyHtml = '';
+      if (historyList.length > 0) {
+        historyHtml = historyList.map(item => `
+          <div class="inspector-history-item">
+            <div class="inspector-history-top">
+              <span class="inspector-history-tool">${escapeHtml(item.toolName || 'ACTION')}</span>
+              <span>${escapeHtml(item.time || '')}</span>
+            </div>
+            <div class="inspector-history-text">${escapeHtml(item.detailText || item.summary || '')}</div>
+          </div>
+        `).join('');
+      } else {
+        historyHtml = '<div style="color:#64748b; font-size:10.5px; padding:6px 0;">최근 작업 이력이 없습니다.</div>';
+      }
+
+      const bodyEl = document.getElementById('inspectorBody');
+      bodyEl.innerHTML = `
+        <div>
+          <div class="inspector-section-label">
+            <span>방 상태 (ROOM STATUS)</span>
+            <span class="state-badge ${isActive ? 'state-WORKING' : 'state-IDLE'}">${isActive ? '작업 진행 중' : '대기 중'}</span>
+          </div>
+          <div class="inspector-section-label" style="margin-top:10px;">
+            <span>${escapeHtml(fullTargetLabel)}</span>
+            <button type="button" class="btn-copy-code" id="btnCopyInspectorTarget">📋 복사</button>
+          </div>
+          <div class="inspector-code-box" id="inspectorCodeBox">${escapeHtml(fullTarget)}</div>
+        </div>
+
+        <div>
+          <div class="inspector-section-label">최근 방 작업 이력 (RECENT HISTORY)</div>
+          <div class="inspector-history-list">
+            ${historyHtml}
+          </div>
+        </div>
+      `;
+
+      const btnCopy = document.getElementById('btnCopyInspectorTarget');
+      if (btnCopy) {
+        btnCopy.addEventListener('click', () => {
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(fullTarget).then(() => {
+              btnCopy.innerText = '✅ 복사됨!';
+              setTimeout(() => { btnCopy.innerText = '📋 복사'; }, 1800);
+            }).catch(() => {});
+          }
+        });
+      }
+
+      modal.style.display = 'flex';
+      playSound('ding');
+    }
+
+    function closeRoomInspector() {
+      const modal = document.getElementById('roomInspectorModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function initRoomInspectorModal() {
+      const closeBtn = document.getElementById('btnInspectorClose');
+      const backdrop = document.getElementById('inspectorBackdrop');
+      if (closeBtn) closeBtn.addEventListener('click', closeRoomInspector);
+      if (backdrop) backdrop.addEventListener('click', closeRoomInspector);
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          const modal = document.getElementById('roomInspectorModal');
+          if (modal && modal.style.display !== 'none') {
+            closeRoomInspector();
+          }
+        }
+      });
+
+      const canvas = document.getElementById('officeCanvas');
+      if (canvas) {
+        canvas.addEventListener('click', (e) => {
+          const rect = canvas.getBoundingClientRect();
+          const scaleX = 480 / rect.width;
+          const clickX = (e.clientX - rect.left) * scaleX;
+          const { ROOM_DEFS } = Office;
+          if (!ROOM_DEFS) return;
+          for (const rId in ROOM_DEFS) {
+            const def = ROOM_DEFS[rId];
+            if (clickX >= def.x && clickX <= def.x + def.w) {
+              openRoomInspector(rId);
+              break;
+            }
+          }
+        });
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initRoomInspectorModal);
+    } else {
+      initRoomInspectorModal();
+    }
+
     function initSearchAndFilter() {
       const input = document.getElementById('floorSearchInput');
       const clearBtn = document.getElementById('floorSearchClear');
@@ -662,6 +832,8 @@
     renderProjectLogs,
     resetStatusDisplayToIdle,
     updateHotJumpBanner,
+    openRoomInspector,
+    closeRoomInspector,
     appendLog
   });
 
@@ -673,6 +845,8 @@
   window.renderProjectLogs = renderProjectLogs;
   window.resetStatusDisplayToIdle = resetStatusDisplayToIdle;
   window.updateHotJumpBanner = updateHotJumpBanner;
+  window.openRoomInspector = openRoomInspector;
+  window.closeRoomInspector = closeRoomInspector;
   window.appendLog = appendLog;
 
 })(window);
