@@ -15,7 +15,7 @@
   } = Office;
 
     // ----------------------------------------------------
-    // F. 캐릭터 클래스 (오프스크린 스프라이트 Blitting)
+    // F. 캐릭터 클래스 (오프스크린 스프라이트 Blitting & 상태머신)
     // ----------------------------------------------------
     class PixelAgent {
       constructor(id, role, type = 'main') {
@@ -35,6 +35,18 @@
         this.animTimer = 0;
         this.lastEventTime = Date.now();
         this.speechBubble = null; // { type, text, expiresAt }
+        this.onArrivedAction = 'WORKING';
+        this.onArrivedSpeech = null;
+
+        // 퇴근 예약 타이머 참조
+        this.leaveTimer = null;
+
+        // 병렬 도구 추적 맵: toolKey -> { toolName, room, startTime }
+        this.activeTools = new Map();
+        this.lastToolActivityTime = Date.now();
+
+        // ERROR 상태 자동 복구 타이머 추적
+        this.errorStartTime = null;
 
         // 엘리베이터 문 애니메이션 상태
         this.elevatorDoorOpen = 0; // 0 ~ 1
@@ -48,16 +60,45 @@
         this.speechBubble = null;
       }
 
-      moveToRoom(roomId, onArrivedAction = 'WORKING') {
+      // 퇴근 타이머 취소 (보고 중 새 작업 수신 시 퇴근 방지)
+      cancelLeaving() {
+        if (this.leaveTimer) {
+          clearTimeout(this.leaveTimer);
+          this.leaveTimer = null;
+        }
+      }
+
+      // GONE 상태에서 새 이벤트 수신 시 엘리베이터에서 출근 처리 (좌표 고착 방지)
+      reviveIfGone(targetRoomId = 'meeting') {
+        if (this.state === 'GONE' || this.state === 'LEAVING') {
+          this.cancelLeaving();
+          this.x = ROOM_DEFS.elevator.targetX;
+          this.y = FLOOR_Y;
+          this.state = 'IDLE';
+          this.moveToRoom(targetRoomId, 'WORKING');
+          this.setSpeech('report', '👋 출근했습니다!');
+          return true;
+        }
+        return false;
+      }
+
+      moveToRoom(roomId, onArrivedAction = 'WORKING', onArrivedSpeech = null) {
+        this.cancelLeaving();
         const room = ROOM_DEFS[roomId] || ROOM_DEFS.research;
         this.currentRoom = room.id;
         this.targetX = room.targetX;
         this.onArrivedAction = onArrivedAction;
+        this.onArrivedSpeech = onArrivedSpeech;
+
         if (Math.abs(this.targetX - this.x) > 3) {
           this.state = 'WALKING';
           this.facing = this.targetX > this.x ? 1 : -1;
         } else {
+          this.x = this.targetX;
           this.state = onArrivedAction;
+          if (onArrivedSpeech) {
+            this.setSpeech(onArrivedSpeech.type, onArrivedSpeech.text, onArrivedSpeech.duration);
+          }
         }
       }
 
@@ -89,6 +130,10 @@
               }
             } else {
               this.state = this.onArrivedAction || 'WORKING';
+              if (this.onArrivedSpeech) {
+                this.setSpeech(this.onArrivedSpeech.type, this.onArrivedSpeech.text);
+                this.onArrivedSpeech = null;
+              }
             }
           }
         }
@@ -101,6 +146,22 @@
         // 3.5초 동안 새 이벤트 없이 생각 중이면 PONDERING (턱 괴기)
         if (this.state === 'THINKING' && (now - this.lastEventTime > 3500)) {
           this.state = 'PONDERING';
+        }
+
+        // ERROR 상태는 5초 후 IDLE로 자동 복귀
+        if (this.state === 'ERROR' && this.errorStartTime && (now - this.errorStartTime > 5000)) {
+          this.state = 'IDLE';
+          this.errorStartTime = null;
+          this.clearSpeech();
+        }
+
+        // 와치독: 도구 결과 없이 N분(기본 10분) 동안 조용하면 "응답 없음 💤" 표시
+        const watchdogMinutes = Office.WATCHDOG_TIMEOUT_MINUTES || 10;
+        const watchdogMs = watchdogMinutes * 60 * 1000;
+        if (this.activeTools.size > 0 && (now - this.lastToolActivityTime > watchdogMs)) {
+          if (!this.speechBubble || !this.speechBubble.text.includes('응답 없음 💤')) {
+            this.setSpeech('think', '응답 없음 💤', 30000);
+          }
         }
       }
 
@@ -232,7 +293,6 @@
         ctx.restore();
       }
     }
-
 
   Office.PixelAgent = PixelAgent;
   window.PixelAgent = PixelAgent;
