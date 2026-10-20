@@ -239,14 +239,44 @@
     // G. 디테일 환경 렌더러
     // ----------------------------------------------------
     let tickCount = 0;
+
+    // 복도 바닥 체커보드 패턴 오프스크린 베이킹 (매 프레임 fillRect 1,680회 -> drawImage 1회로 최적화)
+    const corridorCanvas = document.createElement('canvas');
+    corridorCanvas.width = 480;
+    corridorCanvas.height = 62; // 270 - FLOOR_Y
+    const corridorCtx = corridorCanvas.getContext('2d');
+    corridorCtx.fillStyle = PALETTE[30];
+    corridorCtx.fillRect(0, 0, 480, 62);
+    corridorCtx.fillStyle = PALETTE[31];
+    corridorCtx.fillRect(0, 0, 480, 3);
+    for (let y = 4; y < 62; y += 4) {
+      for (let x = 0; x < 480; x += 4) {
+        corridorCtx.fillRect(x, y, 2, 2);
+      }
+    }
+
+    // 시간대 연동 캐시: new Date().getHours()를 30초마다 1회만 호출하여 GC 부담 완화
+    let cachedHour = new Date().getHours();
+    let lastHourCheckTime = performance.now();
+    function getCachedHour() {
+      const now = performance.now();
+      if (now - lastHourCheckTime >= 30000) {
+        cachedHour = new Date().getHours();
+        lastHourCheckTime = now;
+      }
+      return cachedHour;
+    }
+
+    // 공기 중 먼지 입자: 매 프레임 rgba 문자열을 동적 생성하지 않고 사전 계산된 문자열 재사용
     const dustParticles = [];
     for (let i = 0; i < 20; i++) {
+      const alpha = 0.2 + Math.random() * 0.4;
       dustParticles.push({
         x: Math.random() * 480,
         y: 40 + Math.random() * 160,
         vx: (Math.random() - 0.5) * 0.2,
         vy: (Math.random() - 0.5) * 0.1,
-        alpha: 0.2 + Math.random() * 0.4
+        color: `rgba(255,255,255,${(alpha * 0.4).toFixed(3)})`
       });
     }
 
@@ -263,8 +293,8 @@
       ctx.fillStyle = PALETTE[4];
       ctx.fillRect(0, 34, 480, 2);
 
-      // 2. 실제 시간대 연동 창문
-      const currentHour = new Date().getHours();
+      // 2. 실제 시간대 연동 창문 (30초 캐싱)
+      const currentHour = getCachedHour();
       let skyColor = PALETTE[23];
       let isNight = false;
       let isSunset = false;
@@ -308,19 +338,8 @@
       ctx.fillRect(371, 44, 2, 38);
       ctx.fillRect(346, 62, 52, 2);
 
-      // 3. 복도 바닥
-      ctx.fillStyle = PALETTE[30];
-      ctx.fillRect(0, FLOOR_Y, 480, 62);
-      ctx.fillStyle = PALETTE[31];
-      ctx.fillRect(0, FLOOR_Y, 480, 3);
-
-      // 디더링 체커보드 패턴
-      ctx.fillStyle = PALETTE[31];
-      for (let y = FLOOR_Y + 4; y < 270; y += 4) {
-        for (let x = 0; x < 480; x += 4) {
-          ctx.fillRect(x, y, 2, 2);
-        }
-      }
+      // 3. 복도 바닥 (오프스크린 캔버스 1회 drawImage 복사)
+      ctx.drawImage(corridorCanvas, 0, FLOOR_Y);
 
       // 4. 각 방 소품 및 기둥 드로잉 (간판 텍스트는 별도 고해상도 패스)
       for (const key in ROOM_DEFS) {
@@ -337,7 +356,7 @@
       ctx.font = '6px monospace';
       ctx.fillText('EXIT', 29, 42);
 
-      // 6. 공기 중 먼지 입자
+      // 6. 공기 중 먼지 입자 (사전 계산된 p.color 재사용)
       for (const p of dustParticles) {
         p.x += p.vx;
         p.y += p.vy;
@@ -345,7 +364,7 @@
         if (p.x > 480) p.x = 0;
         if (p.y < 40) p.y = 200;
         if (p.y > 200) p.y = 40;
-        ctx.fillStyle = `rgba(255,255,255,${p.alpha * 0.4})`;
+        ctx.fillStyle = p.color;
         ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
       }
     }
@@ -540,6 +559,37 @@
       ctx.restore();
     }
 
+    // drawBadgeLabel의 measureText 말줄임 루프 캐시 ((텍스트, 최대폭) 키, 최대 200개, 초과 시 LRU 제거)
+    const badgeTruncateCache = new Map();
+    const MAX_BADGE_CACHE_SIZE = 200;
+
+    function getTruncatedBadgeText(ctx, text, maxW) {
+      if (!text) return '';
+      const cacheKey = `${text}__${maxW}`;
+      if (badgeTruncateCache.has(cacheKey)) {
+        const cached = badgeTruncateCache.get(cacheKey);
+        badgeTruncateCache.delete(cacheKey);
+        badgeTruncateCache.set(cacheKey, cached);
+        return cached;
+      }
+
+      let displayText = text;
+      const targetW = maxW - 12;
+      if (ctx.measureText(displayText).width > targetW) {
+        while (displayText.length > 3 && ctx.measureText(displayText + '...').width > targetW) {
+          displayText = displayText.slice(0, -1);
+        }
+        displayText += '...';
+      }
+
+      if (badgeTruncateCache.size >= MAX_BADGE_CACHE_SIZE) {
+        const oldestKey = badgeTruncateCache.keys().next().value;
+        badgeTruncateCache.delete(oldestKey);
+      }
+      badgeTruncateCache.set(cacheKey, displayText);
+      return displayText;
+    }
+
     // ----------------------------------------------------
     // G-1. 고해상도 방별 상세 작업 라벨 및 전광판 렌더링
     // ----------------------------------------------------
@@ -549,15 +599,9 @@
       ctx.font = opts.font || 'bold 10px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif';
       ctx.textBaseline = 'middle';
 
-      // 긴 텍스트 말줄임(...) 처리
-      let displayText = text;
+      // 긴 텍스트 말줄임(...) 처리 (결과 캐시 재사용)
       const maxW = opts.maxW || 104;
-      if (ctx.measureText(displayText).width > maxW - 12) {
-        while (displayText.length > 3 && ctx.measureText(displayText + '...').width > maxW - 12) {
-          displayText = displayText.slice(0, -1);
-        }
-        displayText += '...';
-      }
+      const displayText = getTruncatedBadgeText(ctx, text, maxW);
 
       const tw = ctx.measureText(displayText).width;
       const bw = Math.max(tw + 12, 28);
