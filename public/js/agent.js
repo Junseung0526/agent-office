@@ -152,7 +152,8 @@
         this.speed = 1.6;
 
         this.animTimer = 0;
-        this.memeTimer = Math.random() * 8; // 무작위 밈 타이머 초기화
+        this.memeTimer = Math.random() * 5;
+        this.nextMemeInterval = 8 + Math.random() * 8; // 8~16초 후 혼자서 첫 밈 대사 발화
         this.lastEventTime = Date.now();
         this.speechBubble = null; // { type, text, expiresAt }
         this.onArrivedAction = 'WORKING';
@@ -180,6 +181,8 @@
         if (this.state === 'GONE' || this.state === 'LEAVING') return;
         const meme = AGENT_MEMES[Math.floor(Math.random() * AGENT_MEMES.length)];
         this.setSpeech('meme', meme, 4200);
+        this.memeTimer = 0;
+        this.nextMemeInterval = 9 + Math.random() * 9;
         if (Office.playSound) Office.playSound('think');
       }
 
@@ -278,18 +281,19 @@
           }
         }
 
-        // 밈 대사 주기적 출력 (IDLE, PONDERING 상태에서 14~24초 간격)
-        if (this.state === 'IDLE' || this.state === 'PONDERING') {
+        // ----------------------------------------------------
+        // 에이전트 자율 혼잣말 루프: 클릭하지 않아도 혼자서 8~16초마다 밈/직장인 넋두리 대사 발화
+        // ----------------------------------------------------
+        if (this.state !== 'GONE' && this.state !== 'LEAVING') {
           this.memeTimer = (this.memeTimer || 0) + dt;
-          const interval = 14 + (this.id.charCodeAt(0) % 9);
-          if (this.memeTimer > interval) {
+          if (this.memeTimer >= (this.nextMemeInterval || 12)) {
             this.memeTimer = 0;
-            if (!this.speechBubble && Math.random() < 0.6) {
+            this.nextMemeInterval = 9 + Math.random() * 9; // 다음 발화는 9 ~ 18초 뒤
+            // 중요한 말풍선(에러/사용자 응답 대기 질문)이 아니면 혼자서 밈/넋두리 대사 발화
+            if (!this.speechBubble || (this.speechBubble.type !== 'ask' && this.speechBubble.type !== 'error')) {
               this.sayRandomMeme();
             }
           }
-        } else {
-          this.memeTimer = 0;
         }
 
         // ERROR 상태는 5초 후 IDLE로 자동 복귀

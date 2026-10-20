@@ -586,6 +586,41 @@
       filter: contrast(1.08) brightness(1.04) saturate(1.1);
     }
 
+    /* VS Code 스타일 하단 패널 리사이저 (Splitter) */
+    .panel-resizer {
+      height: 6px;
+      width: 100%;
+      background: #0e1220;
+      border-top: 1px solid #1c233d;
+      border-bottom: 1px solid #1c233d;
+      cursor: row-resize;
+      flex-shrink: 0;
+      position: relative;
+      user-select: none;
+      z-index: 25;
+      transition: background 0.15s ease;
+    }
+    .panel-resizer::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 32px;
+      height: 2px;
+      border-radius: 1px;
+      background: #334155;
+      transition: background 0.15s ease, width 0.15s ease;
+    }
+    .panel-resizer:hover, .panel-resizer.is-resizing {
+      background: #1e293b;
+    }
+    .panel-resizer:hover::after, .panel-resizer.is-resizing::after {
+      background: #38bdf8;
+      width: 48px;
+      box-shadow: 0 0 6px rgba(56, 189, 248, 0.6);
+    }
+
     /* 하단 패널 */
     .bottom-panel {
       height: 165px;
@@ -1233,8 +1268,11 @@
         width: 100%;
         max-width: 100%;
       }
+      .panel-resizer {
+        display: none !important;
+      }
       .bottom-panel {
-        height: auto;
+        height: auto !important;
         flex: none;
         overflow: visible;
       }

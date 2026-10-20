@@ -1119,13 +1119,92 @@
       btn.onclick = toggleCrt;
     }
 
+    // VS Code 스타일 라이브 스트림 하단 패널 리사이저 (드래그 조절 & 로컬 저장 & 더블 클릭 복원)
+    function initPanelResizer() {
+      const resizer = document.getElementById('panelResizer');
+      const panel = document.getElementById('bottomPanel');
+      if (!resizer || !panel) return;
+
+      const DEFAULT_HEIGHT = 165;
+      const MIN_HEIGHT = 80;
+      const STORAGE_KEY = 'agent_office_panel_height';
+
+      // 저장된 사용자 지정 패널 높이 복원
+      const savedHeight = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+      if (!isNaN(savedHeight) && savedHeight >= MIN_HEIGHT && window.innerWidth >= 700) {
+        panel.style.height = `${savedHeight}px`;
+      }
+
+      let isDragging = false;
+      let startY = 0;
+      let startHeight = DEFAULT_HEIGHT;
+
+      function onPointerDown(e) {
+        if (window.innerWidth < 700) return;
+        isDragging = true;
+        startY = e.clientY;
+        startHeight = panel.offsetHeight;
+        resizer.classList.add('is-resizing');
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+        window.addEventListener('pointercancel', onPointerUp);
+      }
+
+      function onPointerMove(e) {
+        if (!isDragging) return;
+        const delta = startY - e.clientY;
+        const maxHeight = Math.round(window.innerHeight * 0.72);
+        const newHeight = Math.min(Math.max(startHeight + delta, MIN_HEIGHT), maxHeight);
+        panel.style.height = `${newHeight}px`;
+        localStorage.setItem(STORAGE_KEY, newHeight);
+
+        if (typeof window.updateCanvasBufferSize === 'function') {
+          window.updateCanvasBufferSize();
+        }
+      }
+
+      function onPointerUp() {
+        if (!isDragging) return;
+        isDragging = false;
+        resizer.classList.remove('is-resizing');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        window.removeEventListener('pointercancel', onPointerUp);
+
+        if (typeof window.updateCanvasBufferSize === 'function') {
+          window.updateCanvasBufferSize();
+        }
+      }
+
+      resizer.addEventListener('pointerdown', onPointerDown);
+
+      // 더블 클릭 시 VS Code처럼 기본 크기(165px)로 즉시 복원
+      resizer.addEventListener('dblclick', () => {
+        panel.style.height = `${DEFAULT_HEIGHT}px`;
+        localStorage.setItem(STORAGE_KEY, DEFAULT_HEIGHT);
+        if (typeof window.updateCanvasBufferSize === 'function') {
+          window.updateCanvasBufferSize();
+        }
+        if (Office.playSound) Office.playSound('ding');
+        showToast('📏 하단 패널 높이가 기본 크기(165px)로 초기화되었습니다.');
+      });
+    }
+
     initReportExport();
     initCrtMode();
+    initPanelResizer();
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
         initSearchAndFilter();
         initReportExport();
         initCrtMode();
+        initPanelResizer();
       });
     } else {
       initSearchAndFilter();

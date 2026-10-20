@@ -32,10 +32,11 @@
     const rect = canvas.getBoundingClientRect();
     const displayW = Math.round(rect.width) || 960;
     const displayH = Math.round(rect.height) || Math.round(displayW * 9 / 16);
-    const dpr = window.devicePixelRatio || 1;
+    // 대형 4K/QHD 모니터 및 레티나 화면에서도 초고해상도 선명도를 보장하기 위해 최소 2배 물리 버퍼 적용
+    const dpr = Math.max(window.devicePixelRatio || 1, 2);
 
-    const targetBufferW = Math.max(480, Math.round(displayW * dpr));
-    const targetBufferH = Math.max(270, Math.round(displayH * dpr));
+    const targetBufferW = Math.max(960, Math.round(displayW * dpr));
+    const targetBufferH = Math.max(540, Math.round(displayH * dpr));
 
     if (canvas.width !== targetBufferW || canvas.height !== targetBufferH) {
       canvas.width = targetBufferW;
@@ -46,6 +47,9 @@
     Office.canvasDisplayWidth = canvasDisplayWidth;
     Office.canvasDisplayHeight = canvasDisplayHeight;
   }
+
+  Office.updateCanvasBufferSize = updateCanvasBufferSize;
+  window.updateCanvasBufferSize = updateCanvasBufferSize;
 
   // 초기 로드 시 1회 즉시 버퍼 크기 초기화
   updateCanvasBufferSize();
@@ -185,10 +189,11 @@
     ctx.drawImage(dotCanvas, 0, 0, canvas.width, canvas.height);
     ctx.restore();
 
-    // 3. 패스 2: 선명한 고해상도 텍스트 (960x540 논리 좌표계를 실제 버퍼 해상도로 스케일링)
+    // 3. 패스 2: 선명한 고해상도 텍스트 (960x540 논리 좌표계를 실제 버퍼 해상도로 가로/세로 독립 정밀 스케일링)
     ctx.save();
-    const textScale = canvas.width / 960;
-    ctx.scale(textScale, textScale);
+    const scaleX = canvas.width / 960;
+    const scaleY = canvas.height / 540;
+    ctx.scale(scaleX, scaleY);
     ctx.imageSmoothingEnabled = true;
 
     drawRoomSignLabels(ctx);
