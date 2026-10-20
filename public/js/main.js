@@ -35,8 +35,9 @@
     // 대형 4K/QHD 모니터 및 레티나 화면에서도 초고해상도 선명도를 보장하기 위해 최소 2배 물리 버퍼 적용
     const dpr = Math.max(window.devicePixelRatio || 1, 2);
 
+    // 16:9 비율을 엄격하게 유지하여 캐릭터/룸 종횡비 왜곡(뚱뚱해짐) 원천 차단
     const targetBufferW = Math.max(960, Math.round(displayW * dpr));
-    const targetBufferH = Math.max(540, Math.round(displayH * dpr));
+    const targetBufferH = Math.round(targetBufferW * 9 / 16);
 
     if (canvas.width !== targetBufferW || canvas.height !== targetBufferH) {
       canvas.width = targetBufferW;
@@ -59,8 +60,11 @@
     if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
     resizeDebounceTimer = setTimeout(() => {
       updateCanvasBufferSize();
-    }, 100);
+    }, 50);
   });
+  if (canvas) {
+    canvasResizeObserver.observe(canvas);
+  }
   if (canvas.parentElement) {
     canvasResizeObserver.observe(canvas.parentElement);
   }
@@ -75,89 +79,8 @@
   Office.mainAgent = mainAgent;
   window.mainAgent = mainAgent;
 
-  // 3. 작은 화면(표시 폭 520px 미만) 반응형 대응: 캐릭터 이름표 숨김 및 말풍선 최소 폰트 크기 보장
-  if (window.PixelAgent && PixelAgent.prototype) {
-    const origDrawSharpUI = PixelAgent.prototype.drawSharpUI;
-    PixelAgent.prototype.drawSharpUI = function(tCtx) {
-      if (this.state === 'GONE') return;
-      const displayW = Office.canvasDisplayWidth || 960;
-
-      // 520px 이상 화면에서만 캐릭터 이름표 렌더링
-      if (displayW >= 520) {
-        const rx = Math.round(this.x * 2);
-        const ry = Math.round(this.y * 2);
-        tCtx.save();
-        tCtx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif';
-        tCtx.textAlign = 'center';
-        tCtx.fillStyle = '#0f172a';
-        tCtx.fillText(this.role, rx + 1, ry - 57);
-        tCtx.fillStyle = '#cbd5e1';
-        tCtx.fillText(this.role, rx, ry - 58);
-        tCtx.restore();
-      }
-
-      // 말풍선 렌더링
-      if (this.speechBubble) {
-        const rx = Math.round(this.x * 2);
-        const ry = Math.round(this.y * 2);
-        this.drawSharpSpeechBubble(tCtx, this.speechBubble, rx, ry - 66);
-      }
-    };
-
-    const origDrawSpeechBubble = PixelAgent.prototype.drawSharpSpeechBubble;
-    PixelAgent.prototype.drawSharpSpeechBubble = function(tCtx, bubble, bx, by) {
-      const displayW = Office.canvasDisplayWidth || 960;
-      if (displayW >= 520) {
-        return origDrawSpeechBubble.call(this, tCtx, bubble, bx, by);
-      }
-      // 표시 폭 520px 미만 모바일: 최소 10px 이상의 가독성을 보장하도록 논리 폰트 스케일 보정
-      const scale = Math.max(0.2, displayW / 960);
-      const minScreenPx = 10;
-      const logicalFontSize = Math.max(13, Math.round(minScreenPx / scale));
-
-      tCtx.save();
-      tCtx.font = `bold ${logicalFontSize}px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif`;
-      let text = bubble.text || '';
-      if (text.length > 28) text = text.slice(0, 26) + '...';
-
-      const metrics = tCtx.measureText(text);
-      const padding = 10;
-      const bw = Math.max(80, Math.min(420, Math.round(metrics.width + padding * 2)));
-      const bh = Math.round(logicalFontSize * 2);
-
-      let bgHex = '#111827';
-      let borderHex = '#4b5563';
-      let textHex = '#f9fafb';
-      if (bubble.type === 'think') {
-        bgHex = '#1e1035'; borderHex = '#8b5cf6'; textHex = '#f3e8ff';
-      } else if (bubble.type === 'tool') {
-        bgHex = '#06281e'; borderHex = '#10b981'; textHex = '#ecfdf5';
-      } else if (bubble.type === 'ask') {
-        bgHex = '#2d1502'; borderHex = '#f59e0b'; textHex = '#fffbeb';
-      } else if (bubble.type === 'error') {
-        bgHex = '#300808'; borderHex = '#ef4444'; textHex = '#fef2f2';
-      } else if (bubble.type === 'meme') {
-        bgHex = '#271033'; borderHex = '#ec4899'; textHex = '#fdf2f8';
-      }
-
-      const x = Math.max(10, Math.min(950 - bw, Math.round(bx - bw / 2)));
-      const y = Math.round(by - bh);
-
-      tCtx.fillStyle = 'rgba(0,0,0,0.6)';
-      tCtx.fillRect(x + 2, y + 2, bw, bh);
-      tCtx.fillStyle = bgHex;
-      tCtx.fillRect(x, y, bw, bh);
-      tCtx.strokeStyle = borderHex;
-      tCtx.lineWidth = 1.5;
-      tCtx.strokeRect(x + 0.5, y + 0.5, bw - 1, bh - 1);
-
-      tCtx.textAlign = 'center';
-      tCtx.textBaseline = 'middle';
-      tCtx.fillStyle = textHex;
-      tCtx.fillText(text, x + bw / 2, y + bh / 2);
-      tCtx.restore();
-    };
-  }
+  // 3. 작은 화면(표시 폭 520px 미만) 반응형 대응 및 스택형 말풍선 렌더링은 PixelAgent 내부에서 통합 관리
+  // (Office.canvasDisplayWidth를 참조하여 이름표 가시성 및 모바일 최소 가독성 보장)
 
   let lastFrameTime = performance.now();
   function renderLoop(now) {
@@ -267,16 +190,15 @@
         if (ev.action === 'thinking') {
           if (!ev.replay && isCurrentFloor) playSound('think');
           const thinkMsg = `💭 ${ev.thinkingText?.slice(0, 30) || '생각 중...'}`;
+          const thinkSpeech = { type: 'think', text: thinkMsg, duration: 4500 };
 
-          // WALKING 중이면 멈추지 않고 걸으면서 말풍선만 표시 후 도착 시 THINKING 전이
-          if (targetAgent.state === 'WALKING') {
-            targetAgent.setSpeech('think', thinkMsg);
-            targetAgent.onArrivedAction = 'THINKING';
-          } else {
-            targetAgent.state = 'THINKING';
-            targetAgent.setSpeech('think', thinkMsg);
-          }
+          // 회의실(meeting) 화이트보드로 이동하여 사고 및 브레인스토밍 수행 (회의실 적극 활용)
+          setRoomTaskStart(pKey, 'meeting', 'thinking', null, ev.thinkingText || '아이디어 구상');
+          targetAgent.moveToRoom('meeting', 'THINKING', thinkSpeech);
         } else if (ev.action === 'tool_start') {
+          // 이전 회의실 사고 작업 완료 처리
+          setRoomTaskEnd(pKey, 'meeting');
+
           const targetRoom = ev.room || 'research';
           const toolKey = ev.toolUseId || ev.id || `${ev.toolName || 'tool'}_${Date.now()}`;
 

@@ -80,6 +80,14 @@
         fields: ['ToolName', 'query', 'Url', 'url', 'ServerName', 'domain'],
         type: 'search_or_mcp',
         prefix: '🌐 '
+      },
+      // 회의실: 계획 수립, 아키텍처 논의, 브레인스토밍, 순차 추론, 실시간 사고 과정
+      meeting: {
+        room: 'meeting',
+        tools: ['sequentialthinking', 'brainstorming', 'plan', 'manage_task', 'schedule', 'task', 'TodoWrite', 'TodoRead', 'thinking'],
+        fields: ['thought', 'prompt', 'title', 'task', 'step', 'goal', 'query', 'toolSummary', 'thinkingText'],
+        type: 'planning',
+        prefix: '💡 '
       }
     };
 
@@ -167,6 +175,18 @@
             prefix = '⚡ ';
             detail = `MCP: ${args.ServerName}`;
           }
+        } else if (cfg.type === 'planning') {
+          if (args.thought && typeof args.thought === 'string') {
+            prefix = '💭 ';
+            detail = maskSensitive(args.thought);
+          } else {
+            for (const f of cfg.fields) {
+              if (args[f] && typeof args[f] === 'string') {
+                detail = maskSensitive(args[f]);
+                break;
+              }
+            }
+          }
         }
       }
 
@@ -202,7 +222,8 @@
           dev: { text: '', prefix: '', active: false, endTime: 0, opacity: 0, tickerOffset: 0 },
           server: { text: '', prefix: '', active: false, endTime: 0, opacity: 0, tickerOffset: 0 },
           archive: { text: '', prefix: '', active: false, endTime: 0, opacity: 0, tickerOffset: 0 },
-          research: { text: '', prefix: '', active: false, endTime: 0, opacity: 0, tickerOffset: 0 }
+          research: { text: '', prefix: '', active: false, endTime: 0, opacity: 0, tickerOffset: 0 },
+          meeting: { text: '', prefix: '', active: false, endTime: 0, opacity: 0, tickerOffset: 0 }
         });
       }
       const tasks = projectRoomTaskStates.get(key);
@@ -752,7 +773,20 @@
         });
       }
 
-      // 5. 내 자리 (user_desk): 토큰 사용량 정보가 있을 때 책상 위 코인 뱃지
+      // 5. 회의실 (meeting): 화이트보드 및 회의 테이블 상단 계획/사고 라벨
+      const meeting = currentTasks.meeting;
+      if (meeting && meeting.opacity > 0 && meeting.text) {
+        drawBadgeLabel(ctx, 744, 210, meeting.prefix + meeting.text, {
+          bg: '#1c1033',
+          border: '#a855f7',
+          text: '#f3e8ff',
+          alpha: meeting.opacity,
+          maxW: 114,
+          font: 'bold 10px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif'
+        });
+      }
+
+      // 6. 내 자리 (user_desk): 토큰 사용량 정보가 있을 때 책상 위 코인 뱃지
       if (currentProjectTokenUsage && currentProjectTokenUsage.hasData) {
         const deskX = (410 + 12 + 28) * 2;
         const deskY = (FLOOR_Y - 32 + 5) * 2;

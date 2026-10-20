@@ -155,7 +155,7 @@
         this.memeTimer = Math.random() * 5;
         this.nextMemeInterval = 8 + Math.random() * 8; // 8~16초 후 혼자서 첫 밈 대사 발화
         this.lastEventTime = Date.now();
-        this.speechBubble = null; // { type, text, expiresAt }
+        this.speechBubbles = []; // 스택형 말풍선 목록 [{ id, type, text, createdAt, expiresAt, duration }]
         this.onArrivedAction = 'WORKING';
         this.onArrivedSpeech = null;
 
@@ -173,8 +173,42 @@
         this.elevatorDoorOpen = 0; // 0 ~ 1
       }
 
+      // 하위 호환용 단일 speechBubble getter/setter
+      get speechBubble() {
+        return this.speechBubbles.length > 0 ? this.speechBubbles[this.speechBubbles.length - 1] : null;
+      }
+      set speechBubble(val) {
+        if (!val) {
+          this.speechBubbles = [];
+        } else {
+          this.speechBubbles = [val];
+        }
+      }
+
       setSpeech(type, text, durationMs = 4500) {
-        this.speechBubble = { type, text, expiresAt: Date.now() + durationMs };
+        if (!text) return;
+        const now = Date.now();
+        const last = this.speechBubbles[this.speechBubbles.length - 1];
+        // 동일한 텍스트가 연속으로 들어오면 수명만 갱신
+        if (last && last.text === text && last.type === type) {
+          last.expiresAt = Math.max(last.expiresAt, now + durationMs);
+          last.duration = durationMs;
+          return;
+        }
+
+        this.speechBubbles.push({
+          id: `${now}_${Math.random().toString(36).slice(2, 6)}`,
+          type,
+          text,
+          createdAt: now,
+          duration: durationMs,
+          expiresAt: now + durationMs
+        });
+
+        // 위로 쌓이는 말풍선 스택은 최대 3개(화면 가림 방지 및 최적 가독성) 유지
+        while (this.speechBubbles.length > 3) {
+          this.speechBubbles.shift();
+        }
       }
 
       sayRandomMeme() {
@@ -187,7 +221,7 @@
       }
 
       clearSpeech() {
-        this.speechBubble = null;
+        this.speechBubbles = [];
       }
 
       // 퇴근 타이머 취소 (보고 중 새 작업 수신 시 퇴근 방지)
@@ -236,8 +270,9 @@
         this.animTimer += dt;
         const now = Date.now();
 
-        if (this.speechBubble && now > this.speechBubble.expiresAt) {
-          this.speechBubble = null;
+        // 수명이 만료된 말풍선 자동 정리 (스택 페이드아웃 완료 후 소멸)
+        if (this.speechBubbles && this.speechBubbles.length > 0) {
+          this.speechBubbles = this.speechBubbles.filter(b => now < b.expiresAt);
         }
 
         // 이동 로직
@@ -281,6 +316,20 @@
           }
         }
 
+        // 장시간(20초 이상) 대기(IDLE) 시 회의실 화이트보드로 걸어가서 로드맵 점검 (회의실 자연스러운 활용)
+        if (this.state === 'IDLE' && (now - this.lastEventTime > 20000)) {
+          if (!this.lastIdleMeetingWalk || (now - this.lastIdleMeetingWalk > 35000)) {
+            this.lastIdleMeetingWalk = now;
+            if (this.currentRoom !== 'meeting' && Math.random() < 0.4) {
+              this.moveToRoom('meeting', 'IDLE', {
+                type: 'think',
+                text: '📋 회의실 화이트보드 점검 중',
+                duration: 4200
+              });
+            }
+          }
+        }
+
         // ----------------------------------------------------
         // 에이전트 자율 혼잣말 루프: 클릭하지 않아도 혼자서 8~16초마다 밈/직장인 넋두리 대사 발화
         // ----------------------------------------------------
@@ -289,8 +338,9 @@
           if (this.memeTimer >= (this.nextMemeInterval || 12)) {
             this.memeTimer = 0;
             this.nextMemeInterval = 9 + Math.random() * 9; // 다음 발화는 9 ~ 18초 뒤
-            // 중요한 말풍선(에러/사용자 응답 대기 질문)이 아니면 혼자서 밈/넋두리 대사 발화
-            if (!this.speechBubble || (this.speechBubble.type !== 'ask' && this.speechBubble.type !== 'error')) {
+            // 사용자 질문(ask)이나 에러(error)가 활성화되어 있지 않을 때만 넋두리/밈 발화
+            const hasUrgentBubble = this.speechBubbles && this.speechBubbles.some(b => b.type === 'ask' || b.type === 'error');
+            if (!hasUrgentBubble) {
               this.sayRandomMeme();
             }
           }
@@ -361,91 +411,152 @@
         ctx.restore();
       }
 
-      // 960x540 네이티브 해상도에서 칼같이 또렷한 한국어 텍스트 및 말풍선 렌더링
+      // 960x540 네이티브 해상도에서 칼같이 또렷한 한국어 텍스트 및 말풍선 스택 렌더링
       drawSharpUI(ctx) {
         if (this.state === 'GONE') return;
 
+        const displayW = Office.canvasDisplayWidth || 960;
         const rx = Math.round(this.x * 2);
         const ry = Math.round(this.y * 2);
 
-        // 1. 캐릭터 이름표 (선명한 고해상도 텍스트)
-        ctx.save();
-        ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#0f172a'; // 외곽 그림자
-        ctx.fillText(this.role, rx + 1, ry - 57);
-        ctx.fillStyle = '#cbd5e1'; // 텍스트 본체
-        ctx.fillText(this.role, rx, ry - 58);
-        ctx.restore();
+        // 1. 캐릭터 이름표 (520px 이상 화면에서만 렌더링하여 모바일 가독성 확보)
+        if (displayW >= 520) {
+          ctx.save();
+          ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#0f172a'; // 외곽 그림자
+          ctx.fillText(this.role, rx + 1, ry - 57);
+          ctx.fillStyle = '#cbd5e1'; // 텍스트 본체
+          ctx.fillText(this.role, rx, ry - 58);
+          ctx.restore();
+        }
 
-        // 2. 고해상도 픽셀 말풍선 렌더링
-        if (this.speechBubble) {
-          this.drawSharpSpeechBubble(ctx, this.speechBubble, rx, ry - 66);
+        // 2. 고해상도 픽셀 말풍선 스택 렌더링 (아래에서 위로 쌓이며 차차 페이드아웃)
+        if (this.speechBubbles && this.speechBubbles.length > 0) {
+          this.drawStackedSpeechBubbles(ctx, rx, ry);
         }
       }
 
-      drawSharpSpeechBubble(ctx, bubble, bx, by) {
-        ctx.save();
-        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif';
-        let text = bubble.text || '';
-        if (text.length > 38) text = text.slice(0, 36) + '...';
+      drawStackedSpeechBubbles(ctx, rx, ry) {
+        const bubbles = this.speechBubbles;
+        if (!bubbles || bubbles.length === 0) return;
 
-        const metrics = ctx.measureText(text);
-        const padding = 10;
-        const bw = Math.max(80, Math.min(320, Math.round(metrics.width + padding * 2)));
-        const bh = 28;
+        const now = Date.now();
+        const displayW = Office.canvasDisplayWidth || 960;
+        const isMobile = displayW < 520;
 
-        let bgHex = '#111827';
-        let borderHex = '#4b5563';
-        let textHex = '#f9fafb';
+        // 모바일 소형 화면에서는 폰트 가독성을 보장하기 위해 폰트와 높이를 살짝 확대
+        const fontStr = isMobile
+          ? 'bold 13.5px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif'
+          : 'bold 12.5px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif';
+        const bh = isMobile ? 28 : 26;
+        const gap = 5;
+        const maxChars = isMobile ? 26 : 36;
 
-        if (bubble.type === 'think') {
-          bgHex = '#31104b'; borderHex = '#a855f7'; textHex = '#f3e8ff';
-        } else if (bubble.type === 'ask') {
-          bgHex = '#451a03'; borderHex = '#f59e0b'; textHex = '#fef08a';
-        } else if (bubble.type === 'error') {
-          bgHex = '#450a0a'; borderHex = '#ef4444'; textHex = '#fecaca';
-          // 에러 지터 효과
-          bx += (Math.random() - 0.5) * 3;
-          by += (Math.random() - 0.5) * 3;
-        } else if (bubble.type === 'report') {
-          bgHex = '#064e3b'; borderHex = '#10b981'; textHex = '#d1fae5';
-        } else if (bubble.type === 'meme') {
-          bgHex = '#271033'; borderHex = '#ec4899'; textHex = '#fdf2f8';
+        // 스택 렌더링: newest (index = bubbles.length - 1)가 최하단 (stackIdx = 0)
+        // 이전 말풍선들은 위로 차례대로 쌓임 (stackIdx = 1, 2)
+        const total = bubbles.length;
+        for (let stackIdx = 0; stackIdx < total; stackIdx++) {
+          const bubble = bubbles[total - 1 - stackIdx];
+          if (!bubble) continue;
+
+          // 수명 만료 페이드아웃 계산 (종료 700ms 전부터 부드럽게 감쇄)
+          const remaining = bubble.expiresAt - now;
+          if (remaining <= 0) continue;
+          const fadeAlpha = remaining < 700 ? Math.max(0, remaining / 700) : 1.0;
+
+          // 상위 스택일수록 은은한 투명도 적용 (최하단 최신 1.0 -> 0.85 -> 0.70)
+          const stackBaseAlpha = stackIdx === 0 ? 1.0 : (stackIdx === 1 ? 0.85 : 0.70);
+          const alpha = stackBaseAlpha * fadeAlpha;
+          if (alpha <= 0.02) continue;
+
+          // Y 위치 계산: 최하단은 캐릭터 머리 위(ry - 66), 상위 말풍선은 위로 누적
+          const baseY = Math.max(20 + bh, (ry - 66) - stackIdx * (bh + gap));
+
+          ctx.save();
+          ctx.font = fontStr;
+
+          let text = bubble.text || '';
+          if (text.length > maxChars) {
+            text = text.slice(0, maxChars - 2) + '...';
+          }
+
+          const metrics = ctx.measureText(text);
+          const bw = Math.max(76, Math.min(340, Math.round(metrics.width + 20)));
+
+          let bgHex = '#111827';
+          let borderHex = '#4b5563';
+          let textHex = '#f9fafb';
+
+          if (bubble.type === 'think') {
+            bgHex = '#2b1045'; borderHex = '#a855f7'; textHex = '#f3e8ff';
+          } else if (bubble.type === 'ask') {
+            bgHex = '#3d1603'; borderHex = '#f59e0b'; textHex = '#fef08a';
+          } else if (bubble.type === 'error') {
+            bgHex = '#3b0a0a'; borderHex = '#ef4444'; textHex = '#fecaca';
+          } else if (bubble.type === 'report') {
+            bgHex = '#053e2e'; borderHex = '#10b981'; textHex = '#d1fae5';
+          } else if (bubble.type === 'meme') {
+            bgHex = '#270e2d'; borderHex = '#ec4899'; textHex = '#fdf2f8';
+          } else if (bubble.type === 'work') {
+            bgHex = '#082e26'; borderHex = '#14b8a6'; textHex = '#ccfbf1';
+          }
+
+          let bx = rx;
+          if (bubble.type === 'error' && stackIdx === 0) {
+            bx += (Math.random() - 0.5) * 2;
+          }
+
+          const x = Math.max(10, Math.min(950 - bw, Math.round(bx - bw / 2)));
+          const y = Math.round(baseY - bh);
+
+          ctx.globalAlpha = alpha;
+
+          // 그림자
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+          ctx.fillRect(x + 2, y + 2, bw, bh);
+
+          // 말풍선 본체
+          ctx.fillStyle = bgHex;
+          ctx.fillRect(x, y, bw, bh);
+
+          // 네온 테두리
+          ctx.strokeStyle = borderHex;
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(x + 0.5, y + 0.5, bw - 1, bh - 1);
+
+          // 말풍선 꼬리 (오직 최하단 최신 말풍선만 화자 머리를 향함)
+          if (stackIdx === 0) {
+            const tailX = Math.max(x + 10, Math.min(x + bw - 10, bx));
+            ctx.fillStyle = bgHex;
+            ctx.beginPath();
+            ctx.moveTo(tailX - 4, y + bh - 0.5);
+            ctx.lineTo(tailX, y + bh + 5);
+            ctx.lineTo(tailX + 4, y + bh - 0.5);
+            ctx.fill();
+
+            ctx.strokeStyle = borderHex;
+            ctx.beginPath();
+            ctx.moveTo(tailX - 4, y + bh - 0.5);
+            ctx.lineTo(tailX, y + bh + 5);
+            ctx.lineTo(tailX + 4, y + bh - 0.5);
+            ctx.stroke();
+          }
+
+          // 텍스트 출력
+          ctx.fillStyle = textHex;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(text, x + bw / 2, y + bh / 2);
+
+          ctx.restore();
         }
+      }
 
-        const x = Math.round(bx - bw / 2);
-        const y = Math.round(by - bh);
-
-        // 픽셀 테두리 상자
-        ctx.fillStyle = bgHex;
-        ctx.fillRect(x, y, bw, bh);
-        ctx.strokeStyle = borderHex;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, bw, bh);
-
-        // 말풍선 꼬리
-        ctx.fillStyle = bgHex;
-        ctx.beginPath();
-        ctx.moveTo(bx - 4, y + bh);
-        ctx.lineTo(bx, y + bh + 5);
-        ctx.lineTo(bx + 4, y + bh);
-        ctx.fill();
-
-        ctx.strokeStyle = borderHex;
-        ctx.beginPath();
-        ctx.moveTo(bx - 4, y + bh);
-        ctx.lineTo(bx, y + bh + 5);
-        ctx.lineTo(bx + 4, y + bh);
-        ctx.stroke();
-
-        // 한글 텍스트 (초고화질 선명 렌더링)
-        ctx.fillStyle = textHex;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(text, bx, y + Math.round(bh / 2));
-
-        ctx.restore();
+      // 하위 호환용 단일 말풍선 렌더 함수 유지
+      drawSharpSpeechBubble(ctx, bubble, bx, by) {
+        if (!bubble) return;
+        this.drawStackedSpeechBubbles(ctx, bx, by + 66);
       }
     }
 
