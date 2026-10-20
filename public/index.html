@@ -16,6 +16,12 @@
       <span>에이전트 오피스 (Agent Office)</span>
     </div>
     <div class="header-info">
+      <!-- 응답 필요 층 퀵 점프 핫키 배너 (백그라운드 질문 발생 시 자동 노출) -->
+      <button type="button" id="hotJumpBanner" class="hot-jump-banner" style="display:none;" title="응답 대기 층으로 즉시 이동">
+        <span class="hot-jump-pulse">❓</span>
+        <span id="hotJumpText">응답 필요</span>
+        <span class="hot-jump-action">이동 ➔</span>
+      </button>
       <div class="status-badge">
         <span class="status-dot"></span>
         <span id="sseStatusText">0.25s 증분 감시 활성</span>
@@ -37,6 +43,24 @@
       <div class="guide-header">
         <span>FLOOR GUIDE</span>
         <span>최고층 ➔ 1F</span>
+      </div>
+      <!-- 층 검색 및 상태 필터 칩 바 -->
+      <div class="floor-filter-toolbar">
+        <div class="floor-search-box">
+          <input type="text" id="floorSearchInput" placeholder="🔍 검색 (단축키: /)" aria-label="프로젝트/경로 검색">
+          <button type="button" id="floorSearchClear" class="btn-search-clear" title="검색어 초기화" style="display:none;">✕</button>
+        </div>
+        <div class="floor-filter-chips">
+          <button type="button" class="filter-chip active" data-filter="all" id="filterAll">
+            전체 <span class="chip-count" id="countAll">0</span>
+          </button>
+          <button type="button" class="filter-chip" data-filter="working" id="filterWorking">
+            <span class="chip-dot dot-working"></span>작업 중 <span class="chip-count" id="countWorking">0</span>
+          </button>
+          <button type="button" class="filter-chip" data-filter="question" id="filterQuestion">
+            <span class="chip-dot dot-question">❓</span>응답 필요 <span class="chip-count" id="countQuestion">0</span>
+          </button>
+        </div>
       </div>
       <div class="floors-list" id="floorsList">
         <!-- 자바스크립트로 층 아이템 렌더링 -->

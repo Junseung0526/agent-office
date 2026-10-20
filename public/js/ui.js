@@ -150,6 +150,7 @@
           if (pKey && pKey !== activeProjectKey) {
             this.unreadQuestionFloors.add(pKey);
             updateFloorsList(projectsList);
+            updateHotJumpBanner();
           }
           this.triggerAlert({
             type: 'ask',
@@ -273,10 +274,71 @@
       }
     }
 
+    let currentFilter = 'all'; // 'all' | 'working' | 'question'
+    let searchQuery = '';
+
+    function filterProjects(projects) {
+      if (!projects) return [];
+      return projects.filter(p => {
+        // 1. 상태 필터
+        if (currentFilter === 'working' && !p.isActive) return false;
+        if (currentFilter === 'question' && !NotificationManager.unreadQuestionFloors.has(p.projectKey)) return false;
+
+        // 2. 검색어 필터
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          const matchName = (p.projectName || '').toLowerCase().includes(q);
+          const matchCwd = (p.cwd || '').toLowerCase().includes(q);
+          const matchFloor = `${p.floor}f`.includes(q) || `${p.floor}` === q;
+          if (!matchName && !matchCwd && !matchFloor) return false;
+        }
+        return true;
+      });
+    }
+
+    function updateFilterCounts(projects) {
+      const all = projects ? projects.length : 0;
+      let working = 0;
+      let question = 0;
+      if (projects) {
+        for (const p of projects) {
+          if (p.isActive) working++;
+          if (NotificationManager.unreadQuestionFloors.has(p.projectKey)) question++;
+        }
+      }
+      const elAll = document.getElementById('countAll');
+      const elWorking = document.getElementById('countWorking');
+      const elQuestion = document.getElementById('countQuestion');
+      if (elAll) elAll.innerText = all;
+      if (elWorking) elWorking.innerText = working;
+      if (elQuestion) elQuestion.innerText = question;
+    }
+
+    function updateHotJumpBanner() {
+      const banner = document.getElementById('hotJumpBanner');
+      const text = document.getElementById('hotJumpText');
+      if (!banner || !text) return;
+      if (NotificationManager.unreadQuestionFloors.size === 0) {
+        banner.style.display = 'none';
+        return;
+      }
+      const firstUnreadKey = NotificationManager.unreadQuestionFloors.values().next().value;
+      const p = (projectsList || []).find(x => x.projectKey === firstUnreadKey);
+      const floorStr = p ? `${p.floor}F ` : '';
+      text.innerText = `${floorStr}응답 필요`;
+      banner.style.display = 'inline-flex';
+      banner.onclick = () => {
+        selectProject(firstUnreadKey);
+      };
+    }
+
     function updateFloorsList(projects) {
       projectsList = projects;
       const listContainer = document.getElementById('floorsList');
       if (!listContainer) return;
+
+      updateFilterCounts(projects);
+      updateHotJumpBanner();
 
       if (!projects || projects.length === 0) {
         listContainer.innerHTML = `
@@ -289,12 +351,29 @@
         return;
       }
 
+      const visibleProjects = filterProjects(projects);
+
+      if (visibleProjects.length === 0) {
+        listContainer.innerHTML = `
+          <div style="padding:20px 12px; text-align:center; color:#64748b; font-size:11px; line-height:1.5;">
+            <div style="font-size:18px; margin-bottom:6px;">🔍</div>
+            <div style="font-weight:700; color:#94a3b8; margin-bottom:4px;">일치하는 층이 없습니다</div>
+            <div>검색어나 필터 조건을 변경해보세요.</div>
+          </div>
+        `;
+        return;
+      } else {
+        // 일치하지 않는 메시지가 남아있다면 제거
+        const emptyMsg = listContainer.querySelector('div:not(.floor-card)');
+        if (emptyMsg) listContainer.innerHTML = '';
+      }
+
       const activeKeys = new Set();
 
       // 프로젝트 목록: server.js에서 이미 최고층 내림차순으로 정렬됨!
       // 키 기반 diff: 전체 innerHTML을 날리지 않고 변경된 카드만 갱신하며 DOM 노드 재사용
-      for (let i = 0; i < projects.length; i++) {
-        const p = projects[i];
+      for (let i = 0; i < visibleProjects.length; i++) {
+        const p = visibleProjects[i];
         const pKey = p.projectKey;
         activeKeys.add(pKey);
 
@@ -340,17 +419,16 @@
         }
       }
 
-      // 목록에서 사라진 프로젝트 카드 정리
+      // 목록에서 사라진 프로젝트 카드 정리 (필터/검색으로 숨겨진 카드도 화면에서 제거)
       for (const [key, card] of floorCardElements.entries()) {
         if (!activeKeys.has(key)) {
           card.remove();
-          floorCardElements.delete(key);
         }
       }
 
       // 첫 접속 시 가장 높은 층(최근 활동 프로젝트) 자동 선택
-      if (!activeProjectKey && projects.length > 0) {
-        selectProject(projects[0].projectKey);
+      if (!activeProjectKey && visibleProjects.length > 0) {
+        selectProject(visibleProjects[0].projectKey);
       } else if (activeProjectKey) {
         const p = projects.find(x => x.projectKey === activeProjectKey);
         if (p) {
@@ -398,6 +476,7 @@
 
       // 해당 층 선택 시 미확인 질문 뱃지 제거
       NotificationManager.unreadQuestionFloors.delete(pKey);
+      updateHotJumpBanner();
 
       const p = projectsList.find(x => x.projectKey === pKey);
       if (p) {
@@ -517,6 +596,62 @@
       }
     }
 
+    // 층 검색 인풋 및 필터 칩 초기화
+    function initSearchAndFilter() {
+      const input = document.getElementById('floorSearchInput');
+      const clearBtn = document.getElementById('floorSearchClear');
+      if (input) {
+        input.addEventListener('input', (e) => {
+          searchQuery = e.target.value.trim();
+          if (clearBtn) clearBtn.style.display = searchQuery ? 'block' : 'none';
+          updateFloorsList(projectsList);
+        });
+      }
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+          if (input) input.value = '';
+          searchQuery = '';
+          clearBtn.style.display = 'none';
+          updateFloorsList(projectsList);
+          if (input) input.focus();
+        });
+      }
+
+      document.querySelectorAll('.filter-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          currentFilter = chip.getAttribute('data-filter') || 'all';
+          updateFloorsList(projectsList);
+        });
+      });
+
+      // 단축키 '/'로 검색창 포커스, 'Escape'로 검색 취소 및 초기화
+      window.addEventListener('keydown', (e) => {
+        if (e.key === '/' && document.activeElement !== input) {
+          const tag = (document.activeElement && document.activeElement.tagName) || '';
+          if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+            e.preventDefault();
+            if (input) input.focus();
+          }
+        } else if (e.key === 'Escape' && document.activeElement === input) {
+          if (input) {
+            input.value = '';
+            searchQuery = '';
+            if (clearBtn) clearBtn.style.display = 'none';
+            input.blur();
+            updateFloorsList(projectsList);
+          }
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initSearchAndFilter);
+    } else {
+      initSearchAndFilter();
+    }
+
 
   Object.assign(Office, {
     updateTokenMeterDisplay,
@@ -526,6 +661,7 @@
     updateStatusDisplay,
     renderProjectLogs,
     resetStatusDisplayToIdle,
+    updateHotJumpBanner,
     appendLog
   });
 
@@ -536,6 +672,7 @@
   window.updateStatusDisplay = updateStatusDisplay;
   window.renderProjectLogs = renderProjectLogs;
   window.resetStatusDisplayToIdle = resetStatusDisplayToIdle;
+  window.updateHotJumpBanner = updateHotJumpBanner;
   window.appendLog = appendLog;
 
 })(window);

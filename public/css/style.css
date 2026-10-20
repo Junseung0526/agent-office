@@ -103,6 +103,163 @@
     }
     .btn-sound:hover { background: #232e4d; }
 
+    /* 응답 필요 층 퀵 점프 핫키 배너 */
+    .hot-jump-banner {
+      background: linear-gradient(135deg, #78350f, #9a3412);
+      border: 1px solid #f97316;
+      color: #ffedd5;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 0 12px rgba(249, 115, 22, 0.4);
+      animation: pulse-hot-jump 1.2s infinite;
+      transition: all 0.15s ease;
+    }
+    .hot-jump-banner:hover {
+      background: linear-gradient(135deg, #9a3412, #c2410c);
+      transform: translateY(-1px);
+      box-shadow: 0 0 16px rgba(249, 115, 22, 0.7);
+    }
+    @keyframes pulse-hot-jump {
+      0%, 100% { box-shadow: 0 0 8px rgba(249, 115, 22, 0.4); }
+      50% { box-shadow: 0 0 18px rgba(249, 115, 22, 0.85); transform: scale(1.02); }
+    }
+    .hot-jump-pulse {
+      font-size: 12px;
+      animation: pulse-dot 0.6s infinite;
+    }
+    .hot-jump-action {
+      font-size: 10px;
+      opacity: 0.85;
+      background: rgba(0,0,0,0.3);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    /* 층 필터 툴바 & 검색 */
+    .floor-filter-toolbar {
+      background: #111526;
+      border-bottom: 1px solid #1c233d;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .floor-search-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    #floorSearchInput {
+      width: 100%;
+      background: #161c30;
+      border: 1px solid #232c4d;
+      border-radius: 4px;
+      color: #f1f5f9;
+      font-family: var(--font-pixel);
+      font-size: 11px;
+      padding: 4px 22px 4px 7px;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    #floorSearchInput:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
+    }
+    #floorSearchInput::placeholder {
+      color: #64748b;
+      font-size: 10.5px;
+    }
+
+    .btn-search-clear {
+      position: absolute;
+      right: 5px;
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 11px;
+      cursor: pointer;
+      padding: 2px 4px;
+      line-height: 1;
+    }
+    .btn-search-clear:hover { color: #f1f5f9; }
+
+    .floor-filter-chips {
+      display: flex;
+      gap: 4px;
+    }
+
+    .filter-chip {
+      flex: 1;
+      background: #181f35;
+      border: 1px solid #253154;
+      color: #94a3b8;
+      border-radius: 3px;
+      padding: 3px 2px;
+      font-size: 9.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .filter-chip:hover {
+      background: #202b49;
+      color: #f1f5f9;
+    }
+    .filter-chip.active {
+      background: #1a2a4f;
+      border-color: #38bdf8;
+      color: #38bdf8;
+      box-shadow: 0 0 6px rgba(56, 189, 248, 0.3);
+    }
+    .filter-chip.active[data-filter="working"] {
+      border-color: #10b981;
+      color: #34d399;
+      background: #064e3b;
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.3);
+    }
+    .filter-chip.active[data-filter="question"] {
+      border-color: #f59e0b;
+      color: #fbbf24;
+      background: #451a03;
+      box-shadow: 0 0 6px rgba(245, 158, 11, 0.3);
+    }
+
+    .chip-count {
+      font-family: monospace;
+      font-size: 9px;
+      opacity: 0.8;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 0 3px;
+      border-radius: 2px;
+    }
+    .chip-dot {
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+    }
+    .chip-dot.dot-working {
+      background: var(--accent-green);
+      box-shadow: 0 0 4px var(--accent-green);
+    }
+    .chip-dot.dot-question {
+      font-size: 9px;
+      width: auto;
+      height: auto;
+    }
+
     /* 메인 컨테이너 */
     .main-layout {
       display: flex;
@@ -604,6 +761,9 @@
       .floor-guide-panel {
         width: 68px;
         flex-shrink: 0;
+      }
+      .floor-filter-toolbar {
+        display: none;
       }
       .guide-header {
         padding: 8px 4px;
