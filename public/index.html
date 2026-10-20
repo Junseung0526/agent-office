@@ -20,10 +20,10 @@
         <span id="sseStatusText">0.25s 증분 감시 활성</span>
       </div>
       <button class="btn-sound" id="btnToggleSound" title="8-bit 레트로 사운드 토글">
-        <span id="soundIcon">🔊</span> 효과음 켜짐
+        <span id="soundIcon">🔊</span> <span class="btn-sound-text">효과음 켜짐</span>
       </button>
       <button class="btn-sound" id="btnToggleNotify" title="데스크톱 브라우저 알림 (응답 필요/완료/에러)">
-        <span id="notifyIcon">🔔</span> <span id="notifyText">알림 켜짐</span>
+        <span id="notifyIcon">🔔</span> <span class="btn-sound-text" id="notifyText">알림 켜짐</span>
       </button>
     </div>
   </header>
@@ -31,7 +31,7 @@
   <!-- 메인 레이아웃 -->
   <div class="main-layout">
     
-    <!-- 좌측: 백화점 층별 안내판 (최고층이 맨 위) -->
+    <!-- 좌측/상단: 백화점 층별 안내판 (최고층이 맨 위/첫번째) -->
     <aside class="floor-guide-panel">
       <div class="guide-header">
         <span>FLOOR GUIDE</span>
@@ -42,14 +42,14 @@
       </div>
     </aside>
 
-    <!-- 우측: 사무실 뷰 & 픽셀 캔버스 -->
+    <!-- 우측/하단: 사무실 뷰 & 픽셀 캔버스 -->
     <main class="office-view-panel">
       
       <!-- 현재 층 배너 -->
       <div class="current-floor-banner">
         <div class="banner-left">
           <span class="banner-floor-tag" id="currentFloorTag">최고층</span>
-          <div>
+          <div style="min-width:0;">
             <div class="banner-project-title" id="currentProjectTitle">프로젝트 탐색 중...</div>
             <div class="banner-session-id" id="currentSessionSubtitle">세션 로딩...</div>
           </div>
@@ -59,11 +59,13 @@
         </div>
       </div>
 
-      <!-- 픽셀 캔버스 래퍼 (960x540 고해상도: 2x 도트 그래픽 + 선명한 한글 텍스트) -->
+      <!-- 픽셀 캔버스 래퍼 (16/9 반응형 스케일링: 정수 도트 그래픽 + 고해상도 벡터 한글 텍스트) -->
       <div class="canvas-wrapper">
         <canvas id="officeCanvas" width="960" height="540"></canvas>
       </div>
 
+      <!-- 하단 상태 패널 -->
+      <footer class="bottom-panel">
         <div class="controls-row">
           <div style="display:flex; align-items:center; gap:8px;">
             <span style="font-weight:700; color:#38bdf8; font-size:11px;">● LIVE STREAM</span>
@@ -75,57 +77,76 @@
         </div>
 
         <div class="feed-container">
-          <!-- 상태 요약 -->
+          <!-- 상태 요약 (모바일 접이식) -->
           <div class="status-summary-box">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-weight:700; font-size:10px; color:#94a3b8;">AGENT STATE</span>
-              <span class="state-badge state-IDLE" id="agentStateBadge">대기 중</span>
-            </div>
-            <div class="summary-text-box" id="agentStatusDetail">
-              에이전트가 새로운 도구 호출이나 질문을 대기하고 있습니다.
+            <button type="button" class="panel-section-toggle" aria-expanded="true" aria-controls="statusSummaryContent">
+              <span>📊 AGENT STATE</span>
+              <span class="toggle-arrow">▼</span>
+            </button>
+            <div class="panel-section-content" id="statusSummaryContent">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span style="font-weight:700; font-size:10px; color:#94a3b8;">AGENT STATE</span>
+                <span class="state-badge state-IDLE" id="agentStateBadge">대기 중</span>
+              </div>
+              <div class="summary-text-box" id="agentStatusDetail">
+                에이전트가 새로운 도구 호출이나 질문을 대기하고 있습니다.
+              </div>
             </div>
           </div>
 
-          <!-- 세션별 토큰 사용량 미터 (사용량 정보가 있을 때만 노출) -->
+          <!-- 세션별 토큰 사용량 미터 (사용량 정보가 있을 때만 노출, 모바일 접이식) -->
           <div class="token-meter-box" id="tokenMeterBox" style="display: none;">
-            <div class="token-meter-header">
-              <span class="token-meter-title">🪙 TOKEN USAGE</span>
-              <span class="token-model-badge" id="tokenModelBadge">-</span>
-            </div>
-            <div class="token-grid">
-              <div class="token-stat">
-                <span class="token-label">입력 (Input)</span>
-                <span class="token-val" id="tokenInputVal">0</span>
+            <button type="button" class="panel-section-toggle" aria-expanded="true" aria-controls="tokenMeterContent">
+              <span>🪙 TOKEN USAGE</span>
+              <span class="toggle-arrow">▼</span>
+            </button>
+            <div class="panel-section-content" id="tokenMeterContent">
+              <div class="token-meter-header">
+                <span class="token-meter-title">🪙 TOKEN USAGE</span>
+                <span class="token-model-badge" id="tokenModelBadge">-</span>
               </div>
-              <div class="token-stat">
-                <span class="token-label">출력 (Output)</span>
-                <span class="token-val" id="tokenOutputVal">0</span>
+              <div class="token-grid">
+                <div class="token-stat">
+                  <span class="token-label">입력 (Input)</span>
+                  <span class="token-val" id="tokenInputVal">0</span>
+                </div>
+                <div class="token-stat">
+                  <span class="token-label">출력 (Output)</span>
+                  <span class="token-val" id="tokenOutputVal">0</span>
+                </div>
+                <div class="token-stat">
+                  <span class="token-label">캐시 (Cache)</span>
+                  <span class="token-val" id="tokenCacheVal">0</span>
+                </div>
+                <div class="token-stat total">
+                  <span class="token-label">총 토큰 (Total)</span>
+                  <span class="token-val" id="tokenTotalVal">0</span>
+                </div>
               </div>
-              <div class="token-stat">
-                <span class="token-label">캐시 (Cache)</span>
-                <span class="token-val" id="tokenCacheVal">0</span>
+              <div class="token-cost-row" id="tokenCostRow" style="display: none;">
+                <span class="token-cost-label">예상 비용</span>
+                <span class="token-cost-val" id="tokenCostVal">$0.00</span>
               </div>
-              <div class="token-stat total">
-                <span class="token-label">총 토큰 (Total)</span>
-                <span class="token-val" id="tokenTotalVal">0</span>
-              </div>
-            </div>
-            <div class="token-cost-row" id="tokenCostRow" style="display: none;">
-              <span class="token-cost-label">예상 비용</span>
-              <span class="token-cost-val" id="tokenCostVal">$0.00</span>
             </div>
           </div>
 
-          <!-- 실시간 이벤트 피드 -->
-          <div class="log-feed-box" id="eventLogFeed">
-            <div class="log-item">
-              <span class="log-time">00:00:00</span>
-              <span class="log-tag">[SYSTEM]</span>
-              <span class="log-msg">에이전트 오피스 픽셀 대시보드가 준비되었습니다.</span>
+          <!-- 실시간 이벤트 피드 (모바일 접이식) -->
+          <div class="log-feed-box-wrapper">
+            <button type="button" class="panel-section-toggle" aria-expanded="true" aria-controls="eventLogFeed">
+              <span>📜 LIVE EVENT FEED</span>
+              <span class="toggle-arrow">▼</span>
+            </button>
+            <div class="panel-section-content" id="eventLogFeedContent">
+              <div class="log-feed-box" id="eventLogFeed">
+                <div class="log-item">
+                  <span class="log-time">00:00:00</span>
+                  <span class="log-tag">[SYSTEM]</span>
+                  <span class="log-msg">에이전트 오피스 픽셀 대시보드가 준비되었습니다.</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-
       </footer>
 
     </main>

@@ -307,18 +307,22 @@
       background: #05070c;
       padding: 8px;
       overflow: hidden;
+      width: 100%;
+      min-height: 0;
     }
 
-    /* 960x540 해상도 (2x 정수 도트 그래픽 + 고해상도 선명한 한글 벡터 텍스트) */
+    /* 480x270 도트 / 960x540 텍스트 패스 (컨테이너 폭에 맞춰 16/9 반응형 스케일링) */
     #officeCanvas {
-      width: 960px;
-      height: 540px;
-      max-width: 100%;
+      width: 100%;
+      max-width: 960px;
+      aspect-ratio: 16 / 9;
+      height: auto;
       max-height: 100%;
       border: 2px solid #202744;
       border-radius: 6px;
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
       background: #0c0f1d;
+      display: block;
     }
 
     /* 하단 패널 */
@@ -329,6 +333,26 @@
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
+    }
+
+    .log-feed-box-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #080a12;
+      min-width: 0;
+    }
+
+    .panel-section-toggle {
+      display: none;
+    }
+
+    .panel-section-content {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
     }
 
     .controls-row {
@@ -570,3 +594,301 @@
     .log-time { color: #64748b; flex-shrink: 0; }
     .log-tag { color: #38bdf8; font-weight: 700; flex-shrink: 0; }
     .log-msg { color: #cbd5e1; word-break: break-all; }
+
+    /* ===================================================
+       반응형 레이아웃 미디어 쿼리 (Responsive Breakpoints)
+       =================================================== */
+
+    /* 1. 태블릿 및 중간 화면 (700px ~ 1100px) */
+    @media (max-width: 1100px) and (min-width: 700.1px) {
+      .floor-guide-panel {
+        width: 68px;
+        flex-shrink: 0;
+      }
+      .guide-header {
+        padding: 8px 4px;
+        justify-content: center;
+      }
+      .guide-header span:first-child {
+        font-size: 10px;
+      }
+      .guide-header span:last-child {
+        display: none;
+      }
+      .floor-card {
+        padding: 8px 4px;
+        text-align: center;
+      }
+      .floor-card-top {
+        justify-content: center;
+        margin-bottom: 0;
+      }
+      .floor-badge {
+        justify-content: center;
+        font-size: 13px;
+      }
+      .floor-title, .floor-cwd, .floor-engine-tag {
+        display: none;
+      }
+      .bottom-panel {
+        height: auto;
+        max-height: 220px;
+      }
+      .feed-container {
+        flex-wrap: wrap;
+        overflow-y: auto;
+      }
+      .status-summary-box {
+        width: 50%;
+        border-bottom: 1px solid #1c233d;
+      }
+      .token-meter-box {
+        width: 50%;
+        border-right: none;
+        border-bottom: 1px solid #1c233d;
+      }
+      .log-feed-box-wrapper {
+        width: 100%;
+        height: 120px;
+      }
+    }
+
+    /* 2. 모바일 화면 (700px 미만) */
+    @media (max-width: 700px) {
+      body {
+        height: auto;
+        min-height: 100dvh;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+      .main-layout {
+        flex-direction: column;
+        overflow: visible;
+        height: auto;
+        min-height: calc(100dvh - 44px);
+      }
+      .floor-guide-panel {
+        width: 100%;
+        border-right: none;
+        border-bottom: 2px solid var(--bg-panel-border);
+        flex-shrink: 0;
+      }
+      .guide-header {
+        display: none;
+      }
+      .floors-list {
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 6px 10px;
+        gap: 8px;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+        scrollbar-width: thin;
+      }
+      .floor-card {
+        display: inline-flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        min-height: 40px;
+        border-radius: 20px;
+        flex-shrink: 0;
+        transform: none !important;
+      }
+      .floor-card-top {
+        display: inline-flex;
+        align-items: center;
+        margin-bottom: 0;
+        gap: 4px;
+      }
+      .floor-badge {
+        font-size: 12px;
+      }
+      .floor-title {
+        display: inline-block;
+        max-width: 110px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 11px;
+        margin-bottom: 0;
+      }
+      .floor-cwd, .floor-engine-tag {
+        display: none;
+      }
+      .office-view-panel {
+        overflow: visible;
+        flex: none;
+        width: 100%;
+      }
+      .canvas-wrapper {
+        padding: 6px;
+        flex: none;
+        width: 100%;
+      }
+      #officeCanvas {
+        width: 100%;
+        max-width: 100%;
+      }
+      .bottom-panel {
+        height: auto;
+        flex: none;
+        overflow: visible;
+      }
+      .feed-container {
+        flex-direction: column;
+        overflow: visible;
+      }
+      .status-summary-box, .token-meter-box, .log-feed-box-wrapper {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #1c233d;
+        flex: none;
+        padding: 0;
+      }
+      .panel-section-toggle {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        min-height: 40px;
+        padding: 8px 12px;
+        background: #14192b;
+        border: none;
+        border-bottom: 1px solid #1f2744;
+        color: #94a3b8;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        text-align: left;
+      }
+      .panel-section-toggle:hover, .panel-section-toggle:focus-visible {
+        background: #1c233d;
+        color: #f1f5f9;
+      }
+      .panel-section-toggle .toggle-arrow {
+        font-size: 9px;
+        transition: transform 0.2s ease;
+      }
+      .panel-section-toggle[aria-expanded="false"] .toggle-arrow {
+        transform: rotate(-90deg);
+      }
+      .panel-section-content {
+        padding: 8px 12px;
+      }
+      .panel-section-content.collapsed {
+        display: none !important;
+      }
+      .log-feed-box {
+        max-height: 180px;
+      }
+    }
+
+    /* 3. 소형 모바일 (480px 이하) */
+    @media (max-width: 480px) {
+      header {
+        padding: 4px 8px;
+        height: auto;
+        min-height: 44px;
+        gap: 6px;
+      }
+      .header-logo {
+        font-size: 13px;
+        gap: 4px;
+      }
+      .header-info {
+        gap: 6px;
+      }
+      .status-badge {
+        padding: 2px 5px;
+        font-size: 10px;
+      }
+      .btn-sound {
+        padding: 4px 8px;
+        min-height: 40px;
+        min-width: 40px;
+        font-size: 11px;
+      }
+      .btn-sound-text {
+        display: none;
+      }
+      .current-floor-banner {
+        padding: 4px 8px;
+        height: auto;
+        min-height: 38px;
+      }
+      .banner-project-title {
+        max-width: 150px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 12px;
+      }
+      .banner-session-id {
+        max-width: 130px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .controls-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        padding: 4px 8px;
+      }
+    }
+
+    /* 4. 초소형 모바일 (360px 이하 및 320px) */
+    @media (max-width: 360px) {
+      .header-logo span:nth-child(2) {
+        max-width: 90px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #sseStatusText {
+        display: none;
+      }
+      .banner-project-title {
+        max-width: 110px;
+      }
+      .banner-session-id {
+        max-width: 90px;
+      }
+      .token-grid {
+        grid-template-columns: 1fr;
+      }
+      .token-stat.total {
+        grid-column: span 1;
+      }
+    }
+
+    /* 5. 터치 디바이스 최적화 (hover: none) */
+    @media (hover: none) {
+      .floor-card:hover {
+        transform: none;
+        background: #14192b;
+        border-color: #212947;
+      }
+      .floor-card.active {
+        background: #1a2542;
+        border-color: #38bdf8;
+      }
+      .btn-sound, .floor-card, .panel-section-toggle {
+        min-height: 40px;
+      }
+    }
+
+    /* 6. 모션 민감 사용자 (prefers-reduced-motion) */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+      .status-dot, .floor-indicator, .floor-badge-alert {
+        animation: none !important;
+      }
+    }

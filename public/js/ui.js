@@ -224,6 +224,26 @@
 
     NotificationManager.init();
 
+    // 모바일 접이식 섹션 (접기/펼치기 토글 및 키보드 접근성)
+    function initCollapsibleSections() {
+      document.querySelectorAll('.panel-section-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+          btn.setAttribute('aria-expanded', !isExpanded);
+          const contentId = btn.getAttribute('aria-controls');
+          const contentEl = document.getElementById(contentId);
+          if (contentEl) {
+            contentEl.classList.toggle('collapsed', isExpanded);
+          }
+        });
+      });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initCollapsibleSections);
+    } else {
+      initCollapsibleSections();
+    }
+
 
     // I. 백화점 층별 안내 사이드바 (최고층이 맨 위!)
     // ----------------------------------------------------
