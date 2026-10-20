@@ -52,6 +52,125 @@
       } else if (costRow) {
         costRow.style.display = 'none';
       }
+
+      // 미니 네온 스파크라인 번레이트 차트 업데이트
+      updateTokenSparkline(Office.activeProjectKey, usage.totalTokens);
+    }
+
+    // 세션별 토큰 소모율 미니 네온 스파크라인 그래프
+    const projectTokenHistory = new Map();
+
+    function updateTokenSparkline(projectKey, totalTokens) {
+      const row = document.getElementById('tokenSparklineRow');
+      const canvas = document.getElementById('tokenSparkline');
+      const rateVal = document.getElementById('tokenBurnRateVal');
+      if (!row || !canvas) return;
+
+      if (!totalTokens || totalTokens <= 0) {
+        row.style.display = 'none';
+        return;
+      }
+      row.style.display = 'flex';
+
+      const pKey = projectKey || Office.activeProjectKey || 'default';
+      if (!projectTokenHistory.has(pKey)) {
+        projectTokenHistory.set(pKey, []);
+      }
+      const history = projectTokenHistory.get(pKey);
+      const now = Date.now();
+
+      const last = history[history.length - 1];
+      if (!last || last.total !== totalTokens || (now - last.time >= 3000)) {
+        history.push({ time: now, total: totalTokens });
+        if (history.length > 20) history.shift();
+      }
+
+      let burnRateStr = '0 tok/s';
+      if (history.length >= 2) {
+        const first = history[0];
+        const latest = history[history.length - 1];
+        const dt = (latest.time - first.time) / 1000;
+        const dTokens = latest.total - first.total;
+        if (dt > 0.5 && dTokens >= 0) {
+          const r = Math.round(dTokens / dt);
+          burnRateStr = `${formatTokenCount(r)}/s`;
+        }
+      }
+      if (rateVal) rateVal.innerText = burnRateStr;
+
+      const sCtx = canvas.getContext('2d');
+      const W = canvas.width;
+      const H = canvas.height;
+      sCtx.clearRect(0, 0, W, H);
+
+      sCtx.strokeStyle = 'rgba(255,255,255,0.06)';
+      sCtx.lineWidth = 1;
+      sCtx.beginPath();
+      sCtx.moveTo(0, H / 2);
+      sCtx.lineTo(W, H / 2);
+      sCtx.stroke();
+
+      if (history.length === 1) {
+        sCtx.strokeStyle = '#38bdf8';
+        sCtx.lineWidth = 1.5;
+        sCtx.beginPath();
+        sCtx.moveTo(4, H / 2);
+        sCtx.lineTo(W - 4, H / 2);
+        sCtx.stroke();
+
+        sCtx.beginPath();
+        sCtx.arc(W - 4, H / 2, 2.5, 0, Math.PI * 2);
+        sCtx.fillStyle = '#10b981';
+        sCtx.fill();
+        return;
+      }
+
+      const totals = history.map(h => h.total);
+      const minVal = Math.min(...totals);
+      const maxVal = Math.max(...totals);
+      const range = (maxVal === minVal) ? 1 : (maxVal - minVal);
+
+      const padX = 6;
+      const padY = 5;
+      const usableW = W - padX * 2;
+      const usableH = H - padY * 2;
+
+      const points = history.map((h, idx) => {
+        const x = padX + (idx / (history.length - 1)) * usableW;
+        const norm = (h.total - minVal) / range;
+        const y = padY + usableH - norm * usableH;
+        return { x, y };
+      });
+
+      const grad = sCtx.createLinearGradient(0, padY, 0, H);
+      grad.addColorStop(0, 'rgba(56, 189, 248, 0.35)');
+      grad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+
+      sCtx.beginPath();
+      sCtx.moveTo(points[0].x, H);
+      points.forEach(pt => sCtx.lineTo(pt.x, pt.y));
+      sCtx.lineTo(points[points.length - 1].x, H);
+      sCtx.closePath();
+      sCtx.fillStyle = grad;
+      sCtx.fill();
+
+      sCtx.beginPath();
+      points.forEach((pt, idx) => {
+        if (idx === 0) sCtx.moveTo(pt.x, pt.y);
+        else sCtx.lineTo(pt.x, pt.y);
+      });
+      sCtx.strokeStyle = '#38bdf8';
+      sCtx.lineWidth = 1.5;
+      sCtx.stroke();
+
+      const lastPt = points[points.length - 1];
+      sCtx.beginPath();
+      sCtx.arc(lastPt.x, lastPt.y, 2.5, 0, Math.PI * 2);
+      sCtx.fillStyle = '#10b981';
+      sCtx.fill();
+      sCtx.strokeStyle = '#ecfdf5';
+      sCtx.lineWidth = 1;
+      sCtx.stroke();
     }
 
     // H-1. 실시간 알림 관리자 (NotificationManager)
@@ -1010,7 +1129,8 @@
     closeRoomInspector,
     appendLog,
     showToast,
-    exportSessionMarkdownReport
+    exportSessionMarkdownReport,
+    updateTokenSparkline
   });
 
   window.updateTokenMeterDisplay = updateTokenMeterDisplay;
@@ -1026,5 +1146,6 @@
   window.appendLog = appendLog;
   window.showToast = showToast;
   window.exportSessionMarkdownReport = exportSessionMarkdownReport;
+  window.updateTokenSparkline = updateTokenSparkline;
 
 })(window);
