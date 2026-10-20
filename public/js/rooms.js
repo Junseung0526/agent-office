@@ -44,15 +44,19 @@
       // 개발실: 수정 중인 파일명 (경로 전체 말고 마지막 파일명만)
       dev: {
         room: 'dev',
-        tools: ['Edit', 'Write', 'MultiEdit', 'replace_file_content', 'write_to_file', 'NotebookEditCell'],
-        fields: ['TargetFile', 'file_path', 'path', 'filename', 'file'],
+        tools: [
+          'Edit', 'edit_file', 'Write', 'write_file', 'write_to_file',
+          'MultiEdit', 'replace_file_content', 'multi_replace_file_content',
+          'NotebookEditCell', 'apply_diff', 'FileEdit', 'StrReplace', 'Patch'
+        ],
+        fields: ['TargetFile', 'Path', 'path', 'file_path', 'filename', 'file', 'target_file', 'filepath'],
         type: 'filename',
         prefix: '📄 '
       },
       // 서버실: 실행 중인 명령어 앞 30자 (토큰/패스워드 마스킹, 전광판 티커)
       server: {
         room: 'server',
-        tools: ['Bash', 'run_command', 'exec', 'terminal', 'sh', 'zsh', 'git'],
+        tools: ['Bash', 'run_command', 'exec', 'terminal', 'execute_command', 'sh', 'zsh', 'git'],
         fields: ['CommandLine', 'command', 'cmd', 'script'],
         type: 'command',
         prefix: '> '
@@ -60,8 +64,12 @@
       // 자료실: 읽는 파일명 또는 검색어 (Grep/Glob 패턴)
       archive: {
         room: 'archive',
-        tools: ['Read', 'View', 'view_file', 'Grep', 'Glob', 'LS', 'Find', 'read_resource', 'list_resources'],
-        fields: ['pattern', 'glob', 'AbsolutePath', 'file_path', 'path', 'query', 'Uri', 'TargetFile'],
+        tools: [
+          'Read', 'read_file', 'View', 'view_file', 'list_dir',
+          'Grep', 'grep_search', 'Glob', 'LS', 'Find', 'find_by_name',
+          'FileSearch', 'read_resource', 'list_resources'
+        ],
+        fields: ['pattern', 'glob', 'AbsolutePath', 'Path', 'path', 'file_path', 'query', 'Uri', 'TargetFile', 'DirectoryPath', 'dir_path', 'directory'],
         type: 'file_or_pattern',
         prefix: '📖 '
       },
