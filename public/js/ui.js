@@ -272,9 +272,19 @@
         let card = floorCardElements.get(pKey);
         if (!card) {
           card = document.createElement('div');
+          card.setAttribute('role', 'button');
+          card.setAttribute('tabindex', '0');
           card.onclick = () => selectProject(pKey);
+          card.onkeydown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              selectProject(pKey);
+            }
+          };
           floorCardElements.set(pKey, card);
         }
+        card.title = `${p.floor}F: ${p.projectName} (${p.cwd})`;
+        card.setAttribute('aria-label', `${p.floor}층 ${p.projectName}`);
 
         renderFloorCard(card, p, isActive, hasUnread);
 

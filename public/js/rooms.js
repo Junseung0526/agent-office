@@ -356,14 +356,17 @@
       ctx.font = '6px monospace';
       ctx.fillText('EXIT', 29, 42);
 
-      // 6. 공기 중 먼지 입자 (사전 계산된 p.color 재사용)
+      // 6. 공기 중 먼지 입자 (사전 계산된 p.color 재사용, prefers-reduced-motion 시 이동 정지)
+      const isReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       for (const p of dustParticles) {
-        p.x += p.vx;
-        p.y += p.vy;
-        if (p.x < 0) p.x = 480;
-        if (p.x > 480) p.x = 0;
-        if (p.y < 40) p.y = 200;
-        if (p.y > 200) p.y = 40;
+        if (!isReducedMotion) {
+          p.x += p.vx;
+          p.y += p.vy;
+          if (p.x < 0) p.x = 480;
+          if (p.x > 480) p.x = 0;
+          if (p.y < 40) p.y = 200;
+          if (p.y > 200) p.y = 40;
+        }
         ctx.fillStyle = p.color;
         ctx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
       }

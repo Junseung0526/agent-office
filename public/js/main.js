@@ -16,49 +16,185 @@
   window.canvas = canvas;
   window.ctx = ctx;
 
-    const mainAgent = new PixelAgent('main', '메인 에이전트', 'main');
-    agentsMap.set('main', mainAgent);
+  // 1. 도트 그래픽 전용 480x270 오프스크린 캔버스 (정수 1x 도트 좌표계 유지)
+  const dotCanvas = document.createElement('canvas');
+  dotCanvas.width = 480;
+  dotCanvas.height = 270;
+  const dotCtx = dotCanvas.getContext('2d');
 
-    let lastFrameTime = performance.now();
-    function renderLoop(now) {
-      const dt = Math.min((now - lastFrameTime) / 1000, 0.1);
-      lastFrameTime = now;
+  // 2. 동적 캔버스 버퍼 해상도 관리 (ResizeObserver + 디바운스 100ms)
+  let canvasDisplayWidth = 960;
+  let canvasDisplayHeight = 540;
+  Office.canvasDisplayWidth = canvasDisplayWidth;
+  Office.canvasDisplayHeight = canvasDisplayHeight;
 
-      // 1. 엔티티 상태 업데이트
-      for (const [_, ag] of agentsMap.entries()) {
-        ag.update(dt);
-      }
+  function updateCanvasBufferSize() {
+    const rect = canvas.getBoundingClientRect();
+    const displayW = Math.round(rect.width) || 960;
+    const displayH = Math.round(rect.height) || Math.round(displayW * 9 / 16);
+    const dpr = window.devicePixelRatio || 1;
 
-      // 1-1. 각 방 상세 작업 라벨 및 전광판 상태 업데이트 (티커 스크롤 및 페이드아웃)
-      updateRoomTaskStates(dt, now);
+    const targetBufferW = Math.max(480, Math.round(displayW * dpr));
+    const targetBufferH = Math.max(270, Math.round(displayH * dpr));
 
-      // 2. 패스 1: 2x 도트 그래픽 (480x270 픽셀아트를 2배 정수 스케일링)
-      ctx.save();
-      ctx.scale(2, 2);
-      ctx.imageSmoothingEnabled = false;
-
-      drawEnvironmentPixels(ctx);
-
-      for (const [_, ag] of agentsMap.entries()) {
-        ag.drawPixels(ctx);
-      }
-      ctx.restore();
-
-      // 3. 패스 2: 선명한 고해상도 텍스트 (960x540 네이티브 벡터 한글 렌더링)
-      ctx.save();
-      ctx.imageSmoothingEnabled = true;
-
-      drawRoomSignLabels(ctx);
-      drawRoomTaskLabels(ctx);
-
-      for (const [_, ag] of agentsMap.entries()) {
-        ag.drawSharpUI(ctx);
-      }
-      ctx.restore();
-
-      requestAnimationFrame(renderLoop);
+    if (canvas.width !== targetBufferW || canvas.height !== targetBufferH) {
+      canvas.width = targetBufferW;
+      canvas.height = targetBufferH;
     }
+    canvasDisplayWidth = displayW;
+    canvasDisplayHeight = displayH;
+    Office.canvasDisplayWidth = canvasDisplayWidth;
+    Office.canvasDisplayHeight = canvasDisplayHeight;
+  }
+
+  // 초기 로드 시 1회 즉시 버퍼 크기 초기화
+  updateCanvasBufferSize();
+
+  let resizeDebounceTimer = null;
+  const canvasResizeObserver = new ResizeObserver(() => {
+    if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
+    resizeDebounceTimer = setTimeout(() => {
+      updateCanvasBufferSize();
+    }, 100);
+  });
+  if (canvas.parentElement) {
+    canvasResizeObserver.observe(canvas.parentElement);
+  }
+  window.addEventListener('resize', () => {
+    if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
+    resizeDebounceTimer = setTimeout(() => {
+      updateCanvasBufferSize();
+    }, 100);
+  });
+
+  const mainAgent = new PixelAgent('main', '메인 에이전트', 'main');
+  agentsMap.set('main', mainAgent);
+
+  // 3. 작은 화면(표시 폭 520px 미만) 반응형 대응: 캐릭터 이름표 숨김 및 말풍선 최소 폰트 크기 보장
+  if (window.PixelAgent && PixelAgent.prototype) {
+    const origDrawSharpUI = PixelAgent.prototype.drawSharpUI;
+    PixelAgent.prototype.drawSharpUI = function(tCtx) {
+      if (this.state === 'GONE') return;
+      const displayW = Office.canvasDisplayWidth || 960;
+
+      // 520px 이상 화면에서만 캐릭터 이름표 렌더링
+      if (displayW >= 520) {
+        const rx = Math.round(this.x * 2);
+        const ry = Math.round(this.y * 2);
+        tCtx.save();
+        tCtx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif';
+        tCtx.textAlign = 'center';
+        tCtx.fillStyle = '#0f172a';
+        tCtx.fillText(this.role, rx + 1, ry - 57);
+        tCtx.fillStyle = '#cbd5e1';
+        tCtx.fillText(this.role, rx, ry - 58);
+        tCtx.restore();
+      }
+
+      // 말풍선 렌더링
+      if (this.speechBubble) {
+        const rx = Math.round(this.x * 2);
+        const ry = Math.round(this.y * 2);
+        this.drawSharpSpeechBubble(tCtx, this.speechBubble, rx, ry - 66);
+      }
+    };
+
+    const origDrawSpeechBubble = PixelAgent.prototype.drawSharpSpeechBubble;
+    PixelAgent.prototype.drawSharpSpeechBubble = function(tCtx, bubble, bx, by) {
+      const displayW = Office.canvasDisplayWidth || 960;
+      if (displayW >= 520) {
+        return origDrawSpeechBubble.call(this, tCtx, bubble, bx, by);
+      }
+      // 표시 폭 520px 미만 모바일: 최소 10px 이상의 가독성을 보장하도록 논리 폰트 스케일 보정
+      const scale = Math.max(0.2, displayW / 960);
+      const minScreenPx = 10;
+      const logicalFontSize = Math.max(13, Math.round(minScreenPx / scale));
+
+      tCtx.save();
+      tCtx.font = `bold ${logicalFontSize}px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif`;
+      let text = bubble.text || '';
+      if (text.length > 28) text = text.slice(0, 26) + '...';
+
+      const metrics = tCtx.measureText(text);
+      const padding = 10;
+      const bw = Math.max(80, Math.min(420, Math.round(metrics.width + padding * 2)));
+      const bh = Math.round(logicalFontSize * 2);
+
+      let bgHex = '#111827';
+      let borderHex = '#4b5563';
+      let textHex = '#f9fafb';
+      if (bubble.type === 'think') {
+        bgHex = '#1e1035'; borderHex = '#8b5cf6'; textHex = '#f3e8ff';
+      } else if (bubble.type === 'tool') {
+        bgHex = '#06281e'; borderHex = '#10b981'; textHex = '#ecfdf5';
+      } else if (bubble.type === 'ask') {
+        bgHex = '#2d1502'; borderHex = '#f59e0b'; textHex = '#fffbeb';
+      } else if (bubble.type === 'error') {
+        bgHex = '#300808'; borderHex = '#ef4444'; textHex = '#fef2f2';
+      }
+
+      const x = Math.max(10, Math.min(950 - bw, Math.round(bx - bw / 2)));
+      const y = Math.round(by - bh);
+
+      tCtx.fillStyle = 'rgba(0,0,0,0.6)';
+      tCtx.fillRect(x + 2, y + 2, bw, bh);
+      tCtx.fillStyle = bgHex;
+      tCtx.fillRect(x, y, bw, bh);
+      tCtx.strokeStyle = borderHex;
+      tCtx.lineWidth = 1.5;
+      tCtx.strokeRect(x + 0.5, y + 0.5, bw - 1, bh - 1);
+
+      tCtx.textAlign = 'center';
+      tCtx.textBaseline = 'middle';
+      tCtx.fillStyle = textHex;
+      tCtx.fillText(text, x + bw / 2, y + bh / 2);
+      tCtx.restore();
+    };
+  }
+
+  let lastFrameTime = performance.now();
+  function renderLoop(now) {
+    const dt = Math.min((now - lastFrameTime) / 1000, 0.1);
+    lastFrameTime = now;
+
+    // 1. 엔티티 상태 업데이트
+    for (const [_, ag] of agentsMap.entries()) {
+      ag.update(dt);
+    }
+
+    // 1-1. 각 방 상세 작업 라벨 및 전광판 상태 업데이트 (티커 스크롤 및 페이드아웃)
+    updateRoomTaskStates(dt, now);
+
+    // 2. 패스 1: 480x270 오프스크린 캔버스에 도트 그래픽 렌더링 후 메인 버퍼에 확대 복사
+    // imageSmoothingEnabled = false로 고전 도트 질감 및 정수 배율 선명도 유지
+    dotCtx.imageSmoothingEnabled = false;
+    drawEnvironmentPixels(dotCtx);
+    for (const [_, ag] of agentsMap.entries()) {
+      ag.drawPixels(dotCtx);
+    }
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(dotCanvas, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    // 3. 패스 2: 선명한 고해상도 텍스트 (960x540 논리 좌표계를 실제 버퍼 해상도로 스케일링)
+    ctx.save();
+    const textScale = canvas.width / 960;
+    ctx.scale(textScale, textScale);
+    ctx.imageSmoothingEnabled = true;
+
+    drawRoomSignLabels(ctx);
+    drawRoomTaskLabels(ctx);
+
+    for (const [_, ag] of agentsMap.entries()) {
+      ag.drawSharpUI(ctx);
+    }
+    ctx.restore();
+
     requestAnimationFrame(renderLoop);
+  }
+  requestAnimationFrame(renderLoop);
 
 
   Office.mainAgent = mainAgent;
