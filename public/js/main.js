@@ -169,6 +169,8 @@
         if (ev.agentId && ev.agentId.startsWith('sub_')) {
           // 이미 퇴근 처리된 서브에이전트의 늦은 종료 이벤트로 다시 출근시키지 않음
           if (ev.action === 'subagent_finish') return;
+          // 재접속 리플레이에서는 출근 이벤트가 아닌 한 서브에이전트를 새로 만들지 않음 (퇴근한 팀원 재등장 방지)
+          if (ev.replay && ev.action !== 'subagent_spawn') return;
           targetAgent = createSubagent(pKey, ev.agentId, ev);
         } else {
           // 멀티 에이전트 병렬 협업 동적 분담:

@@ -748,7 +748,8 @@
       const baseMsg = detailObj ? `${detailObj.prefix}${detailObj.text}` : (ev.toolSummary || ev.thinkingText || ev.questionText || ev.resultSummary || ev.userPrompt || ev.subagentName || '이벤트');
       let msgStr = baseMsg;
       if (isSubagentEvent) {
-        const subAgent = getProjectAgents(ev.projectKey).get(ev.agentId);
+        const floorAgents = Office.projectAgentsMap && Office.projectAgentsMap.get(ev.projectKey);
+        const subAgent = floorAgents && floorAgents.get(ev.agentId);
         const who = ev.subagentRole || (subAgent && subAgent.role) || 'SUB';
         msgStr = `[${who}] ${baseMsg}`;
       }

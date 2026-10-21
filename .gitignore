@@ -4,3 +4,4 @@
 .run/*.pid
 .run/*.png
 .cache/
+.run/*.log
