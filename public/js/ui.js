@@ -409,7 +409,10 @@
               <span>${escapeHtml(p.floor)}F</span>
               ${hasUnread ? '<span class="floor-badge-alert" title="내 응답 필요!"><svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>' : ''}
             </div>
-            <span class="floor-engine-tag">${escapeHtml(engineUpper)}</span>
+            <span class="floor-tags">
+              ${p.activeSubagents > 0 ? `<span class="floor-sub-tag" title="작업 중인 서브에이전트">+${escapeHtml(p.activeSubagents)} SUB</span>` : ''}
+              <span class="floor-engine-tag">${escapeHtml(engineUpper)}</span>
+            </span>
           </div>
           <div class="floor-title">${escapeHtml(p.projectName)}</div>
           <div class="floor-cwd">${escapeHtml(p.cwd)}</div>
@@ -709,6 +712,10 @@
         badge.innerText = '서브에이전트 배치';
         badge.className = 'state-badge state-WORKING';
         detail.innerText = `팀원 출근: ${ev.subagentName} (${ev.subagentRole})`;
+      } else if (ev.action === 'subagent_finish') {
+        badge.innerText = '서브에이전트 보고';
+        badge.className = 'state-badge state-IDLE';
+        detail.innerText = `팀원 퇴근: ${ev.subagentName} (${ev.subagentRole})\n보고: ${ev.resultSummary || '작업 완료'}`;
       } else if (ev.action === 'turn_finish') {
         badge.innerText = '업무 완료 (AWAITING)';
         badge.className = 'state-badge state-ASKING';
@@ -731,12 +738,20 @@
       if (ev.isError) item.classList.add('error');
       if (ev.action === 'thinking') item.classList.add('think');
       if (ev.action === 'ask_user') item.classList.add('ask');
-      if (ev.action === 'turn_finish') item.classList.add('done');
+      if (ev.action === 'turn_finish' || ev.action === 'subagent_finish') item.classList.add('done');
+      const isSubagentEvent = typeof ev.agentId === 'string' && ev.agentId.startsWith('sub_');
+      if (isSubagentEvent) item.classList.add('sub');
 
       const timeStr = ev.timestamp ? new Date(ev.timestamp).toTimeString().split(' ')[0] : new Date().toTimeString().split(' ')[0];
       const tagStr = `[${(ev.action || 'EVENT').toUpperCase()}]`;
       const detailObj = (ev.action === 'tool_start') ? extractTaskDetail(ev.room || 'research', ev.toolName, ev.toolArgs, ev.toolSummary) : null;
-      const msgStr = detailObj ? `${detailObj.prefix}${detailObj.text}` : (ev.toolSummary || ev.thinkingText || ev.questionText || ev.resultSummary || ev.userPrompt || '이벤트');
+      const baseMsg = detailObj ? `${detailObj.prefix}${detailObj.text}` : (ev.toolSummary || ev.thinkingText || ev.questionText || ev.resultSummary || ev.userPrompt || ev.subagentName || '이벤트');
+      let msgStr = baseMsg;
+      if (isSubagentEvent) {
+        const subAgent = getProjectAgents(ev.projectKey).get(ev.agentId);
+        const who = ev.subagentRole || (subAgent && subAgent.role) || 'SUB';
+        msgStr = `[${who}] ${baseMsg}`;
+      }
 
       const timeSpan = document.createElement('span');
       timeSpan.className = 'log-time';

@@ -167,9 +167,9 @@
       let targetAgent = targetAgents.get(ev.agentId);
       if (!targetAgent) {
         if (ev.agentId && ev.agentId.startsWith('sub_')) {
-          targetAgent = new PixelAgent(ev.agentId, ev.subagentRole || '서브에이전트', 'sub');
-          targetAgent.x = ROOM_DEFS.elevator.targetX;
-          targetAgents.set(ev.agentId, targetAgent);
+          // 이미 퇴근 처리된 서브에이전트의 늦은 종료 이벤트로 다시 출근시키지 않음
+          if (ev.action === 'subagent_finish') return;
+          targetAgent = createSubagent(pKey, ev.agentId, ev);
         } else {
           // 멀티 에이전트 병렬 협업 동적 분담:
           // 1) 서버실/터미널/명령어 도구는 ops(DevOps 엔지니어)가 전담 수행
@@ -198,7 +198,7 @@
 
         // 2. GONE 또는 LEAVING 상태에서 새 이벤트가 오면 엘리베이터에서 즉시 출근시켜 좌표 고착 방지
         const destRoom = ev.room || (ev.action === 'ask_user' || ev.action === 'turn_finish' ? 'user_desk' : 'meeting');
-        if (targetAgent.state === 'GONE' || targetAgent.state === 'LEAVING') {
+        if ((targetAgent.state === 'GONE' || targetAgent.state === 'LEAVING') && ev.action !== 'subagent_finish') {
           targetAgent.reviveIfGone(destRoom);
         }
 
@@ -302,18 +302,13 @@
             targetAgent.clearSpeech();
           }
         } else if (ev.action === 'subagent_spawn') {
-          const subId = ev.agentId || 'sub_1';
-          let sub = targetAgents.get(subId);
-          if (!sub) {
-            if (!ev.replay && isCurrentFloor) playSound('ding');
-            sub = new PixelAgent(subId, ev.subagentRole || '서브에이전트', 'sub');
-            sub.x = ROOM_DEFS.elevator.targetX;
-            targetAgents.set(subId, sub);
-          } else {
-            sub.reviveIfGone('dev');
-          }
-          sub.moveToRoom('dev', 'WORKING');
-          sub.setSpeech('report', `👋 출근: ${ev.subagentName || '지원'}`);
+          // targetAgent는 위에서 조회/생성된 서브에이전트 본인 (엘리베이터에서 등장 후 회의실에서 브리핑)
+          if (!ev.replay && isCurrentFloor) playSound('ding');
+          targetAgent.moveToRoom('meeting', 'THINKING');
+          targetAgent.setSpeech('report', `👋 출근: ${ev.subagentName || '지원'}`);
+        } else if (ev.action === 'subagent_finish') {
+          if (!ev.replay && isCurrentFloor) playSound('report');
+          targetAgent.leave({ type: 'report', text: `📦 보고 완료: ${ev.resultSummary?.slice(0, 22) || ev.subagentName || '작업 완료'}`, duration: 4000 });
         } else if (ev.action === 'turn_finish') {
           finishAllRoomTasks(pKey);
 
@@ -412,13 +407,6 @@
         setConnectionState(false, '서버 종료됨');
       });
     }
-    initSSE();
-
-    // 초기 프로젝트 목록 및 토큰 정보 즉시 요청
-    fetch('/api/projects')
-      .then(res => res.json())
-      .then(list => updateFloorsList(list))
-      .catch(() => {});
     initSSE();
 
     // 초기 프로젝트 목록 및 토큰 정보 즉시 요청

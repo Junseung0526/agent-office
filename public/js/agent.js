@@ -185,6 +185,10 @@
 
         // 엘리베이터 문 애니메이션 상태
         this.elevatorDoorOpen = 0; // 0 ~ 1
+
+        // 소속 층(프로젝트) 키 및 방 내부 자리 오프셋 (서브에이전트 여러 명이 겹치지 않도록 분산)
+        this.projectKey = null;
+        this.slotOffset = 0;
       }
 
       // 하위 호환용 단일 speechBubble getter/setter
@@ -276,11 +280,24 @@
         return false;
       }
 
+      // 업무 종료 후 엘리베이터로 걸어가 퇴근 (도착 시 GONE, 서브에이전트는 맵에서 제거)
+      leave(speech = null) {
+        if (this.state === 'GONE' || this.state === 'LEAVING') return;
+        this.cancelLeaving();
+        this.activeTools.clear();
+        this.currentRoom = 'elevator';
+        this.targetX = ROOM_DEFS.elevator.targetX;
+        this.onArrivedSpeech = null;
+        if (speech) this.setSpeech(speech.type, speech.text, speech.duration || 4500);
+        this.state = 'LEAVING';
+        this.facing = this.targetX > this.x ? 1 : -1;
+      }
+
       moveToRoom(roomId, onArrivedAction = 'WORKING', onArrivedSpeech = null) {
         this.cancelLeaving();
         const room = ROOM_DEFS[roomId] || ROOM_DEFS.research;
         this.currentRoom = room.id;
-        this.targetX = room.targetX;
+        this.targetX = room.targetX + (room.id === 'elevator' ? 0 : this.slotOffset);
         this.onArrivedAction = onArrivedAction;
         this.onArrivedSpeech = onArrivedSpeech;
 
@@ -316,10 +333,11 @@
             if (this.state === 'LEAVING') {
               this.state = 'GONE';
               playSound('ding');
-              if (this.type === 'sub') {
+              if (this.id.startsWith('sub_')) {
                 setTimeout(() => {
-                  if (this.state === 'GONE') {
-                    agentsMap.delete(this.id);
+                  const map = projectAgentsMap.get(this.projectKey);
+                  if (this.state === 'GONE' && map && map.get(this.id) === this) {
+                    map.delete(this.id);
                   }
                 }, 3000);
               }
@@ -374,6 +392,12 @@
               this.sayRandomMeme();
             }
           }
+        }
+
+        // 서브에이전트 무응답 자동 퇴근: 종료 신호가 없는 엔진(Antigravity) 및 비정상 종료 대비
+        if (this.id.startsWith('sub_') && this.state !== 'GONE' && this.state !== 'LEAVING' &&
+            this.activeTools.size === 0 && (now - this.lastEventTime > SUBAGENT_IDLE_LEAVE_MS)) {
+          this.leave({ type: 'report', text: '💤 응답 없음, 퇴근합니다', duration: 3500 });
         }
 
         // ERROR 상태는 5초 후 IDLE로 자동 복귀
@@ -454,10 +478,13 @@
           ctx.save();
           ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif';
           ctx.textAlign = 'center';
+          // 서브에이전트 이름표는 발밑에 표시하여 같은 방의 메인/DevOps 이름표와 겹치지 않게 함
+          const isSubagent = this.id.startsWith('sub_');
+          const labelY = isSubagent ? ry + 20 : ry - 58;
           ctx.fillStyle = '#0f172a'; // 외곽 그림자
-          ctx.fillText(this.role, rx + 1, ry - 57);
-          ctx.fillStyle = '#cbd5e1'; // 텍스트 본체
-          ctx.fillText(this.role, rx, ry - 58);
+          ctx.fillText(this.role, rx + 1, labelY + 1);
+          ctx.fillStyle = isSubagent ? '#7dd3fc' : '#cbd5e1'; // 텍스트 본체
+          ctx.fillText(this.role, rx, labelY);
           ctx.restore();
         }
 
@@ -593,6 +620,40 @@
   Office.PixelAgent = PixelAgent;
   window.PixelAgent = PixelAgent;
 
+  const SUBAGENT_IDLE_LEAVE_MS = 3 * 60 * 1000;
+  const SUBAGENT_SLOT_OFFSETS = [-14, 14, -22, 22, -7, 7];
+
+  // 서브에이전트 생성: 엘리베이터에서 등장, 기존 팀원과 겹치지 않는 자리 오프셋 배정
+  function createSubagent(pKey, subId, ev) {
+    const map = getProjectAgents(pKey);
+    const label = formatSubagentLabel(ev.subagentRole, ev.subagentName);
+    const sub = new PixelAgent(subId, label, 'sub', ev.agentType || 'claude');
+    sub.description = ev.subagentName || null;
+    sub.projectKey = pKey || Office.activeProjectKey || 'default';
+    sub.x = ROOM_DEFS.elevator.targetX;
+    sub.targetX = sub.x;
+    sub.currentRoom = 'elevator';
+
+    const used = new Set();
+    for (const [id, ag] of map.entries()) {
+      if (id.startsWith('sub_') && ag.state !== 'GONE') used.add(ag.slotOffset);
+    }
+    sub.slotOffset = SUBAGENT_SLOT_OFFSETS.find(o => !used.has(o)) ?? 0;
+    map.set(subId, sub);
+    return sub;
+  }
+
+  // 캔버스 이름표는 짧게 (에이전트 유형 우선, 없으면 작업 설명)
+  function formatSubagentLabel(role, name) {
+    const r = role && role !== '서브에이전트' ? role : '';
+    const n = name && name !== 'Subagent' ? name : '';
+    const label = r || n || '서브에이전트';
+    return label.length > 14 ? label.slice(0, 13) + '…' : label;
+  }
+
+  Office.createSubagent = createSubagent;
+  window.createSubagent = createSubagent;
+
   // 프로젝트별 에이전트 분리 맵 (Floor별 독립 에이전트 인스턴스 관리 - 메인 & DevOps 2인 1조 병렬 체제)
   const projectAgentsMap = new Map();
 
@@ -606,10 +667,12 @@
       // 1. 메인 에이전트 (Antigravity/Claude 메인 엔지니어 - 기획, 코드, 유저 인터랙션 전담)
       const mainRole = engine === 'antigravity' ? 'Antigravity 메인' : 'Claude 메인';
       const mainAg = new PixelAgent('main', mainRole, 'main', engine);
+      mainAg.projectKey = key;
       map.set('main', mainAg);
 
       // 2. DevOps / 인프라 병렬 처리 에이전트 (서버실 백그라운드 프로세스 및 병렬 도구 전담)
       const opsAg = new PixelAgent('ops', 'DevOps 엔지니어', 'sub', engine);
+      opsAg.projectKey = key;
       opsAg.x = ROOM_DEFS.server.targetX;
       opsAg.targetX = ROOM_DEFS.server.targetX;
       opsAg.currentRoom = 'server';

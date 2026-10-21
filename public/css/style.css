@@ -479,6 +479,27 @@ header {
   display: block;
 }
 
+.floor-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.floor-sub-tag {
+  font-size: 8.5px;
+  font-family: var(--font-mono);
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+  font-weight: 600;
+}
+
+.log-item.sub .log-msg {
+  color: #7dd3fc;
+}
+
 .floor-engine-tag {
   font-size: 8.5px;
   font-family: var(--font-mono);
