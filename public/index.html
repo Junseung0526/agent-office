@@ -33,7 +33,7 @@
       </button>
       <div class="status-badge" title="0.25s 증분 세션 로그 스트림 감시 활성">
         <span class="status-dot"></span>
-        <span id="sseStatusText">LIVE TELEMETRY (0.25s)</span>
+        <span id="sseStatusText">CONNECTING</span>
       </div>
       <button class="btn-sound" id="btnToggleSound" title="8-bit 사운드 토글">
         <span id="soundIcon">
@@ -126,11 +126,7 @@
         <div class="controls-row">
           <div class="live-stream-header-left">
             <span class="live-stream-dot"></span>
-            <span class="live-stream-title">LIVE TELEMETRY STREAM</span>
-            <span class="live-stream-desc">0.25s 증분 세션 추적 활성</span>
-          </div>
-          <div class="live-stream-header-right">
-            <span class="canvas-spec-label">HD 960×540 · 60 FPS</span>
+            <span class="live-stream-title">ACTIVITY</span>
           </div>
         </div>
 
@@ -150,7 +146,7 @@
                 <span class="state-badge state-IDLE" id="agentStateBadge">대기 중</span>
               </div>
               <div class="summary-text-box" id="agentStatusDetail">
-                에이전트가 새로운 도구 호출이나 지시를 대기하고 있습니다.
+                <div class="status-empty">최근 활동이 없습니다. 에이전트가 작업을 시작하면 여기에 표시됩니다.</div>
               </div>
             </div>
           </div>
@@ -218,9 +214,9 @@
             </button>
             <div class="panel-section-content" id="eventLogFeedContent">
               <div class="log-feed-box" id="eventLogFeed">
-                <div class="log-item">
-                  <span class="log-time">00:00:00</span>
-                  <span class="log-tag">[SYSTEM]</span>
+                <div class="log-item k-system">
+                  <span class="log-time">--:--:--</span>
+                  <span class="log-tag">SYSTEM</span>
                   <span class="log-msg">에이전트 오피스 워크스테이션이 준비되었습니다.</span>
                 </div>
               </div>

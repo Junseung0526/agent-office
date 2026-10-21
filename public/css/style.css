@@ -496,10 +496,6 @@ header {
   font-weight: 600;
 }
 
-.log-item.sub .log-msg {
-  color: #7dd3fc;
-}
-
 .floor-engine-tag {
   font-size: 8.5px;
   font-family: var(--font-mono);
@@ -716,7 +712,7 @@ header {
    하단 실시간 텔레메트리 스트림 패널
    =================================================== */
 .bottom-panel {
-  height: 165px;
+  height: 210px;
   background: #0c0e17;
   border-top: 1px solid var(--border-subtle);
   display: flex;
@@ -1044,23 +1040,82 @@ header {
 }
 
 .log-item {
+  --kind: var(--text-muted);
   display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.02);
-  border-left: 2px solid var(--accent-cyan);
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+  padding: 1px 6px;
+  border-radius: 4px;
 }
+.log-item:hover { background: rgba(255, 255, 255, 0.03); }
 
-.log-item.error { border-left-color: var(--accent-red); background: rgba(239, 68, 68, 0.08); }
-.log-item.think { border-left-color: var(--accent-purple); background: rgba(139, 92, 246, 0.05); }
-.log-item.ask { border-left-color: var(--accent-amber); background: rgba(245, 158, 11, 0.08); }
-.log-item.done { border-left-color: var(--accent-emerald); background: rgba(16, 185, 129, 0.06); }
+.log-item.k-tool   { --kind: var(--accent-cyan); }
+.log-item.k-result { --kind: #64748b; }
+.log-item.k-think  { --kind: #a78bfa; }
+.log-item.k-ask    { --kind: var(--accent-amber); }
+.log-item.k-done   { --kind: var(--accent-emerald); }
+.log-item.k-user   { --kind: #e2e8f0; }
+.log-item.k-sub    { --kind: #7dd3fc; }
+.log-item.k-error  { --kind: var(--accent-red); background: rgba(239, 68, 68, 0.06); }
+.log-item.k-ask    { background: rgba(245, 158, 11, 0.05); }
 
-.log-time { color: var(--text-muted); flex-shrink: 0; font-variant-numeric: tabular-nums; }
-.log-tag { color: var(--accent-cyan); font-weight: 700; flex-shrink: 0; }
-.log-msg { color: var(--text-secondary); word-break: break-all; line-height: 1.35; }
+.log-time { color: var(--text-faint); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.log-tag {
+  flex-shrink: 0;
+  width: 52px;
+  text-align: center;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 15px;
+  color: var(--kind);
+  background: color-mix(in srgb, var(--kind) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--kind) 28%, transparent);
+}
+.log-agent {
+  flex-shrink: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #7dd3fc;
+  font-size: 10px;
+}
+.log-msg {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.log-item.k-error .log-msg { color: #fca5a5; }
+.log-item.k-ask .log-msg, .log-item.k-user .log-msg { color: var(--text-primary); }
+
+/* 에이전트 상태: 라벨/값 행 */
+.status-row {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.status-row:last-child { border-bottom: none; }
+.status-key { color: var(--text-muted); font-size: 10.5px; }
+.status-val {
+  color: var(--text-primary);
+  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+.status-empty { color: var(--text-muted); font-size: 11px; }
 
 /* ===================================================
    방/에이전트 인터랙티브 인스펙터 모달 (Developer Inspector)

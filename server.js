@@ -11,6 +11,9 @@ const { isValidHost, setSecurityHeaders, resolveSafeStaticPath, maskSecrets } = 
 const { handleSseConnection, closeAllSseClients } = require('./lib/sse');
 const { scanSessions, scheduleNextPoll, buildProjectsList, broadcastSessionsList, stopPoll } = require('./lib/sessions');
 const { saveTokenCache } = require('./lib/tail');
+const { createLogger } = require('./lib/logger');
+
+const log = createLogger('server');
 
 // HTTP 서버 인스턴스 생성
 const server = http.createServer((req, res) => {
@@ -109,12 +112,12 @@ const server = http.createServer((req, res) => {
 
 // 안전한 종료 (SIGINT / SIGTERM)
 function gracefulShutdown(signal) {
-  console.log(`\n🛑 [에이전트 오피스] ${signal} 수신: 서버를 안전하게 종료합니다...`);
+  log.info('Shutting down', { signal });
   stopPoll();
   saveTokenCache();
   closeAllSseClients();
   server.close(() => {
-    console.log('✅ [에이전트 오피스] 서버가 완전히 종료되었습니다.');
+    log.info('Server stopped');
     process.exit(0);
   });
   setTimeout(() => process.exit(0), 1500);
@@ -126,6 +129,11 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 // 세션 초기 스캔 및 폴링 시작
 scanSessions();
 scheduleNextPoll();
+
+function exitPortInUse() {
+  log.error('Port is already in use by another process', { port: config.PORT, hint: `PORT=${Number(config.PORT) + 1} ./office.sh start` });
+  process.exit(1);
+}
 
 // 포트 충돌 처리 및 중복 기동 방지
 server.on('error', (err) => {
@@ -140,37 +148,34 @@ server.on('error', (err) => {
         try {
           const data = JSON.parse(body);
           if (data.app === config.APP_NAME) {
-            console.log(`🏢 [에이전트 오피스] 서버가 이미 백그라운드에서 실행 중입니다 (PID: ${data.pid}, http://${config.HOST}:${config.PORT}).`);
+            log.info('Another Agent Office instance is already running', { pid: data.pid, url: `http://${config.HOST}:${config.PORT}` });
             process.exit(0);
           }
         } catch (e) {}
-        console.error(`❌ [에이전트 오피스] 포트 ${config.PORT}가 다른 프로그램에 의해 이미 사용 중입니다.`);
-        console.error(`   👉 PORT 환경변수로 다른 포트를 지정하세요: PORT=${Number(config.PORT) + 1} ./office.sh start`);
-        process.exit(1);
+        exitPortInUse();
       });
     });
     checkReq.on('error', () => {
-      console.error(`❌ [에이전트 오피스] 포트 ${config.PORT}가 다른 프로그램에 의해 이미 사용 중입니다.`);
-      console.error(`   👉 PORT 환경변수로 다른 포트를 지정하세요: PORT=${Number(config.PORT) + 1} ./office.sh start`);
-      process.exit(1);
+      exitPortInUse();
     });
     checkReq.on('timeout', () => {
       checkReq.destroy();
-      console.error(`❌ [에이전트 오피스] 포트 ${config.PORT}가 다른 프로그램에 의해 이미 사용 중입니다.`);
-      console.error(`   👉 PORT 환경변수로 다른 포트를 지정하세요: PORT=${Number(config.PORT) + 1} ./office.sh start`);
-      process.exit(1);
+      exitPortInUse();
     });
   } else {
-    console.error(`❌ 서버 오류 발생:`, err);
+    log.error('Server error', { code: err.code, err });
     process.exit(1);
   }
 });
 
 server.listen(config.PORT, config.HOST, () => {
-  console.log(`====================================================`);
-  console.log(`  🏢 [에이전트 오피스 / Agent Office] v${config.APP_VERSION} 서버 기동!`);
-  console.log(`  🔗 웹페이지: http://${config.HOST}:${config.PORT}`);
-  console.log(`  🔒 로컬 전용 바인딩: ${config.HOST}`);
-  console.log(`  ⏱️  감시 주기: 가변 (활성 ${config.POLL_INTERVAL_ACTIVE_MS}ms / 대기 ${config.POLL_INTERVAL_IDLE_MS}ms)`);
-  console.log(`====================================================`);
+  log.info(`Agent Office v${config.APP_VERSION} listening`, {
+    url: `http://${config.HOST}:${config.PORT}`,
+    pid: process.pid,
+    node: process.version
+  });
+  log.info('Session watcher started', {
+    pollActiveMs: config.POLL_INTERVAL_ACTIVE_MS,
+    pollIdleMs: config.POLL_INTERVAL_IDLE_MS
+  });
 });

@@ -615,7 +615,8 @@
       if (logs.length === 0) {
         const item = document.createElement('div');
         item.className = 'log-item';
-        item.innerHTML = `<span class="log-time">${new Date().toTimeString().split(' ')[0]}</span><span class="log-tag">[READY]</span><span class="log-msg">이 층의 새로운 에이전트 이벤트를 대기하고 있습니다.</span>`;
+        item.classList.add('k-system');
+        item.innerHTML = `<span class="log-time">${new Date().toTimeString().split(' ')[0]}</span><span class="log-tag">READY</span><span class="log-msg">이 층의 새로운 에이전트 이벤트를 대기하고 있습니다.</span>`;
         feed.appendChild(item);
         return;
       }
@@ -630,10 +631,10 @@
       const detail = document.getElementById('agentStatusDetail');
       if (badge) {
         badge.className = 'state-badge state-IDLE';
-        badge.innerText = '대기 중 (IDLE)';
+        badge.innerText = '대기 중';
       }
       if (detail) {
-        detail.innerText = '에이전트가 새로운 도구 호출이나 질문을 대기하고 있습니다.';
+        detail.innerHTML = '<div class="status-empty">최근 활동이 없습니다. 에이전트가 작업을 시작하면 여기에 표시됩니다.</div>';
       }
     }
 
@@ -679,53 +680,93 @@
       }
     }
 
+    // 상태 상세 영역을 라벨/값 행으로 렌더링 (내보내기용 innerText도 "라벨 값" 형태로 유지)
+    function renderStatusRows(detail, rows) {
+      detail.textContent = '';
+      for (const [label, value] of rows) {
+        if (value === undefined || value === null || value === '') continue;
+        const row = document.createElement('div');
+        row.className = 'status-row';
+        const k = document.createElement('span');
+        k.className = 'status-key';
+        k.textContent = label;
+        const v = document.createElement('span');
+        v.className = 'status-val';
+        v.textContent = String(value);
+        v.title = String(value);
+        row.append(k, v);
+        detail.appendChild(row);
+      }
+    }
+
+    function agentLabel(ev) {
+      if (typeof ev.agentId === 'string' && ev.agentId.startsWith('sub_')) {
+        return ev.subagentRole || ev.subagentName || '서브에이전트';
+      }
+      return ev.agentId === 'ops' ? 'DevOps' : '메인';
+    }
+
     function updateStatusDisplay(ev) {
       const badge = document.getElementById('agentStateBadge');
       const detail = document.getElementById('agentStatusDetail');
       if (!badge || !detail || !ev) return;
-      badge.className = `state-badge state-${(ev.action || 'IDLE').toUpperCase()}`;
+
+      const roomName = ROOM_DEFS[ev.room]?.name;
+      const agent = agentLabel(ev);
+      let state = 'IDLE';
+      let label = '대기 중';
+      let rows = [];
 
       if (ev.action === 'thinking') {
-        badge.innerText = '생각 중 (THINKING)';
-        badge.className = 'state-badge state-THINKING';
-        detail.innerText = ev.thinkingText || '에이전트가 생각하고 있습니다.';
+        state = 'THINKING'; label = '생각 중';
+        rows = [['에이전트', agent], ['내용', ev.thinkingText || '-']];
       } else if (ev.action === 'tool_start') {
         const detailObj = extractTaskDetail(ev.room || 'research', ev.toolName, ev.toolArgs, ev.toolSummary);
-        badge.innerText = `도구 실행 (${ev.toolName})`;
-        badge.className = 'state-badge state-WORKING';
-        detail.innerText = `방: [${ROOM_DEFS[ev.room]?.name || '정보검색실'}]\n작업: ${detailObj.prefix}${detailObj.text}`;
+        state = 'WORKING'; label = '도구 실행';
+        rows = [['에이전트', agent], ['도구', ev.toolName], ['위치', roomName], ['작업', `${detailObj.prefix}${detailObj.text}`]];
       } else if (ev.action === 'tool_end') {
         if (ev.isError) {
-          badge.innerText = '도구 실패 (ERROR)';
-          badge.className = 'state-badge state-ERROR';
-          detail.innerText = `오류: ${ev.errorSummary || '도구 실패'}`;
+          state = 'ERROR'; label = '오류';
+          rows = [['에이전트', agent], ['위치', roomName], ['오류', ev.errorSummary || '도구 실행 실패']];
         } else {
-          badge.innerText = '도구 완료 (DONE)';
-          badge.className = 'state-badge state-IDLE';
-          detail.innerText = `결과 도착: ${ev.resultSummary || '정상 완료'}`;
+          state = 'IDLE'; label = '도구 완료';
+          rows = [['에이전트', agent], ['위치', roomName], ['결과', ev.resultSummary || '정상 완료']];
         }
       } else if (ev.action === 'ask_user') {
-        badge.innerText = '응답 필요 (ASK)';
-        badge.className = 'state-badge state-ASKING';
-        detail.innerText = `질문: ${ev.questionText || '사용자 의견을 확인하고 있습니다.'}`;
+        state = 'ASKING'; label = '응답 필요';
+        rows = [['질문', ev.questionText || '사용자 확인이 필요합니다']];
       } else if (ev.action === 'subagent_spawn') {
-        badge.innerText = '서브에이전트 배치';
-        badge.className = 'state-badge state-WORKING';
-        detail.innerText = `팀원 출근: ${ev.subagentName} (${ev.subagentRole})`;
+        state = 'WORKING'; label = '서브에이전트 시작';
+        rows = [['유형', ev.subagentRole], ['작업', ev.subagentName]];
       } else if (ev.action === 'subagent_finish') {
-        badge.innerText = '서브에이전트 보고';
-        badge.className = 'state-badge state-IDLE';
-        detail.innerText = `팀원 퇴근: ${ev.subagentName} (${ev.subagentRole})\n보고: ${ev.resultSummary || '작업 완료'}`;
+        state = 'REPORTING'; label = '서브에이전트 완료';
+        rows = [['유형', ev.subagentRole], ['작업', ev.subagentName], ['보고', ev.resultSummary || '작업 완료']];
       } else if (ev.action === 'turn_finish') {
-        badge.innerText = '업무 완료 (AWAITING)';
-        badge.className = 'state-badge state-ASKING';
-        detail.innerText = `보고서: ${ev.resultSummary || '업무가 완료되었습니다. 다음 지시를 기다립니다.'}`;
+        state = 'ASKING'; label = '턴 완료';
+        rows = [['요약', ev.resultSummary || '작업이 끝났습니다. 다음 지시를 기다립니다.']];
       } else if (ev.action === 'user_input') {
-        badge.innerText = '사용자 입력 (INPUT)';
-        badge.className = 'state-badge state-WORKING';
-        detail.innerText = `입력 수신: ${ev.userPrompt || '새로운 지시'}`;
+        state = 'WORKING'; label = '입력 수신';
+        rows = [['입력', ev.userPrompt || '새로운 지시']];
+      } else {
+        return;
       }
+
+      badge.className = `state-badge state-${state}`;
+      badge.innerText = label;
+      renderStatusRows(detail, rows);
     }
+
+    // 이벤트 로그 배지 라벨 및 색상 분류
+    const LOG_KINDS = {
+      tool_start: { label: 'TOOL', cls: 'k-tool' },
+      tool_end: { label: 'RESULT', cls: 'k-result' },
+      thinking: { label: 'THINK', cls: 'k-think' },
+      ask_user: { label: 'ASK', cls: 'k-ask' },
+      turn_finish: { label: 'DONE', cls: 'k-done' },
+      user_input: { label: 'USER', cls: 'k-user' },
+      subagent_spawn: { label: 'SPAWN', cls: 'k-sub' },
+      subagent_finish: { label: 'REPORT', cls: 'k-sub' }
+    };
 
     function appendLog(ev, smartScroll = true) {
       const feed = document.getElementById('eventLogFeed');
@@ -733,26 +774,15 @@
 
       const isScrolledToBottom = (feed.scrollHeight - feed.scrollTop - feed.clientHeight) < 40;
 
+      const kind = ev.isError ? { label: 'ERROR', cls: 'k-error' } : (LOG_KINDS[ev.action] || { label: (ev.action || 'EVENT').toUpperCase(), cls: 'k-system' });
       const item = document.createElement('div');
-      item.className = 'log-item';
-      if (ev.isError) item.classList.add('error');
-      if (ev.action === 'thinking') item.classList.add('think');
-      if (ev.action === 'ask_user') item.classList.add('ask');
-      if (ev.action === 'turn_finish' || ev.action === 'subagent_finish') item.classList.add('done');
+      item.className = `log-item ${kind.cls}`;
       const isSubagentEvent = typeof ev.agentId === 'string' && ev.agentId.startsWith('sub_');
-      if (isSubagentEvent) item.classList.add('sub');
 
-      const timeStr = ev.timestamp ? new Date(ev.timestamp).toTimeString().split(' ')[0] : new Date().toTimeString().split(' ')[0];
-      const tagStr = `[${(ev.action || 'EVENT').toUpperCase()}]`;
+      const timeStr = new Date(ev.timestamp || Date.now()).toTimeString().split(' ')[0];
       const detailObj = (ev.action === 'tool_start') ? extractTaskDetail(ev.room || 'research', ev.toolName, ev.toolArgs, ev.toolSummary) : null;
-      const baseMsg = detailObj ? `${detailObj.prefix}${detailObj.text}` : (ev.toolSummary || ev.thinkingText || ev.questionText || ev.resultSummary || ev.userPrompt || ev.subagentName || '이벤트');
-      let msgStr = baseMsg;
-      if (isSubagentEvent) {
-        const floorAgents = Office.projectAgentsMap && Office.projectAgentsMap.get(ev.projectKey);
-        const subAgent = floorAgents && floorAgents.get(ev.agentId);
-        const who = ev.subagentRole || (subAgent && subAgent.role) || 'SUB';
-        msgStr = `[${who}] ${baseMsg}`;
-      }
+      const msgStr = (detailObj ? `${detailObj.prefix}${detailObj.text}` : (ev.toolSummary || ev.thinkingText || ev.questionText || ev.errorSummary || ev.resultSummary || ev.userPrompt || ev.subagentName || '이벤트'))
+        .replace(/\s+/g, ' ').trim();
 
       const timeSpan = document.createElement('span');
       timeSpan.className = 'log-time';
@@ -760,14 +790,21 @@
 
       const tagSpan = document.createElement('span');
       tagSpan.className = 'log-tag';
-      tagSpan.textContent = tagStr;
+      tagSpan.textContent = kind.label;
+
+      item.append(timeSpan, tagSpan);
+
+      if (isSubagentEvent || ev.agentId === 'ops') {
+        const who = document.createElement('span');
+        who.className = 'log-agent';
+        who.textContent = agentLabel(ev);
+        item.appendChild(who);
+      }
 
       const msgSpan = document.createElement('span');
       msgSpan.className = 'log-msg';
       msgSpan.textContent = msgStr;
-
-      item.appendChild(timeSpan);
-      item.appendChild(tagSpan);
+      msgSpan.title = msgStr;
       item.appendChild(msgSpan);
       feed.appendChild(item);
 
@@ -1196,7 +1233,7 @@
       const panel = document.getElementById('bottomPanel');
       if (!resizer || !panel) return;
 
-      const DEFAULT_HEIGHT = 165;
+      const DEFAULT_HEIGHT = 210;
       const MIN_HEIGHT = 80;
       const STORAGE_KEY = 'agent_office_panel_height';
 
@@ -1255,7 +1292,7 @@
 
       resizer.addEventListener('pointerdown', onPointerDown);
 
-      // 더블 클릭 시 VS Code처럼 기본 크기(165px)로 즉시 복원
+      // 더블 클릭 시 VS Code처럼 기본 크기(210px)로 즉시 복원
       resizer.addEventListener('dblclick', () => {
         panel.style.height = `${DEFAULT_HEIGHT}px`;
         localStorage.setItem(STORAGE_KEY, DEFAULT_HEIGHT);
@@ -1263,7 +1300,7 @@
           window.updateCanvasBufferSize();
         }
         if (Office.playSound) Office.playSound('ding');
-        showToast('하단 패널 높이가 기본 크기(165px)로 초기화되었습니다.');
+        showToast('하단 패널 높이가 기본 크기(210px)로 초기화되었습니다.');
       });
     }
 
