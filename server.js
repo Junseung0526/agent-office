@@ -6,6 +6,7 @@
 
 const http = require('http');
 const fs = require('fs');
+const path = require('path');
 const config = require('./lib/config');
 const { isValidHost, setSecurityHeaders, resolveSafeStaticPath, maskSecrets } = require('./lib/security');
 const { handleSseConnection, closeAllSseClients } = require('./lib/sse');
@@ -27,8 +28,15 @@ const server = http.createServer((req, res) => {
   // 2) 보안 헤더 설정
   setSecurityHeaders(res);
 
+  // 읽기 전용 서버: GET/HEAD만 허용
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8', 'Allow': 'GET, HEAD' });
+    res.end('405 Method Not Allowed');
+    return;
+  }
+
   // 3) URI 디코딩 및 Null 바이트(%00) 검사
-  const rawPath = req.url.split('?')[0];
+  const rawPath = (req.url || '/').split('?')[0];
   if (rawPath.includes('%00') || rawPath.includes('\0')) {
     res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('400 Bad Request');
@@ -100,9 +108,19 @@ const server = http.createServer((req, res) => {
   }
 
   try {
+    // 프론트엔드가 자주 바뀌므로 매번 재검증(no-cache)하되, 변경 없으면 ETag로 304 응답
+    const stat = fs.statSync(safeResult.realPath);
+    const etag = `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`;
+    const headers = { 'Cache-Control': 'no-cache', 'ETag': etag };
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, headers);
+      res.end();
+      return;
+    }
     const content = fs.readFileSync(safeResult.realPath);
-    const contentType = config.MIME_TYPES[safeResult.ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': contentType });
+    headers['Content-Type'] = config.MIME_TYPES[safeResult.ext] || 'application/octet-stream';
+    headers['Content-Length'] = content.length;
+    res.writeHead(200, headers);
     res.end(content);
   } catch (err) {
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -110,21 +128,42 @@ const server = http.createServer((req, res) => {
   }
 });
 
-// 안전한 종료 (SIGINT / SIGTERM)
+// office.sh가 아닌 경로(kill, 로그아웃 등)로 종료돼도 stale PID 파일이 남지 않도록 자기 PID일 때만 정리
+const PID_FILE = path.join(__dirname, '.run', 'office.pid');
+function removeOwnPidFile() {
+  try {
+    if (fs.readFileSync(PID_FILE, 'utf-8').trim() === String(process.pid)) fs.unlinkSync(PID_FILE);
+  } catch (e) {}
+}
+
+// 안전한 종료 (SIGINT / SIGTERM / SIGHUP)
+let shuttingDown = false;
 function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
   log.info('Shutting down', { signal });
   stopPoll();
   saveTokenCache();
   closeAllSseClients();
+  removeOwnPidFile();
   server.close(() => {
     log.info('Server stopped');
     process.exit(0);
   });
-  setTimeout(() => process.exit(0), 1500);
+  server.closeIdleConnections();
+  setTimeout(() => process.exit(0), 1500).unref();
 }
 
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGHUP', () => gracefulShutdown('SIGHUP'));
+
+// 로컬 대시보드는 감독 프로세스 없이(nohup) 돌기 때문에, 예기치 못한 예외 하나로 죽지 않고 기록 후 계속 동작한다.
+// 모든 상태는 로그 파일에서 다시 읽어 복구 가능한 읽기 전용 캐시라 계속 실행해도 데이터 손실 위험이 없다.
+process.on('uncaughtException', (err) => log.error('Uncaught exception', { err }));
+process.on('unhandledRejection', (reason) => {
+  log.error('Unhandled promise rejection', { err: reason instanceof Error ? reason : new Error(String(reason)) });
+});
 
 // 세션 초기 스캔 및 폴링 시작
 scanSessions();
@@ -164,6 +203,7 @@ server.on('error', (err) => {
     });
   } else {
     log.error('Server error', { code: err.code, err });
+    removeOwnPidFile();
     process.exit(1);
   }
 });

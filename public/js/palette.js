@@ -183,8 +183,70 @@
     const CHAR_COLOR_DEFAULT = CHAR_COLOR_ANTIGRAVITY;
 
 
+    // ----------------------------------------------------
+    // C. 아이소메트릭 오피스 테마 (iso.js 전용)
+    // 빛은 화면 왼쪽 위에서 온다: 윗면 1.0 > 왼쪽 앞면(+y) 0.9 > 오른쪽 앞면(+x) 0.76
+    // ----------------------------------------------------
+    const ISO_THEME = {
+      // 다크 컨트롤룸 배경: 짙은 남색 + 비네트 + 점 격자, 건물 아래 인디고/시안 빛 웅덩이
+      backdrop: {
+        center: '#121a36', mid: '#0b1022', edge: '#05070f',
+        dot: 'rgba(150, 170, 255, 0.11)',
+        poolA: 'rgba(99, 102, 241, 0.42)', poolB: 'rgba(34, 211, 238, 0.14)',
+        rim: 'rgba(165, 200, 255, 0.55)', rimSoft: 'rgba(103, 232, 249, 0.22)',
+        window: ['#0a1030', '#1a2456'], spill: [255, 232, 190]
+      },
+      // 캔버스 라벨: 어두운 유리 카드
+      glass: {
+        bg: 'rgba(12, 16, 34, 0.78)', bgStrong: 'rgba(14, 19, 40, 0.9)',
+        border: 'rgba(255, 255, 255, 0.14)', shadow: 'rgba(0, 0, 0, 0.35)',
+        text: '#eef1ff', sub: '#aab3d6'
+      },
+      sky: {
+        day: ['#8fbdf0', '#c9def8', '#eef2f8'],
+        night: ['#070b24', '#141b4d', '#2c3277'],
+        horizonDay: 'rgba(255, 233, 204, 0.55)',
+        horizonNight: 'rgba(120, 110, 220, 0.30)'
+      },
+      grass: { top: '#82c27a', rim: '#a3d897', side: '#5f9f57', sideR: '#4f8a4a', dot: '#6fae67', flower: ['#fff4c2', '#ffd1dc', '#ffffff'] },
+      soil: { a: '#b07a52', b: '#93603f', c: '#7a4c32', strata: '#c49068' },
+      plinth: { top: '#e3e6ee', side: '#c3c8d4', sideR: '#aab1c1' },
+      wall: { cap: '#ffffff', rail: '#ffffff', skirt: '#cfc8bc', partition: '#f3f1ec', partitionCap: '#ffffff' },
+      hall: { floor: '#ebe8e1', alt: '#e2ded5', runner: '#7d8db0', runnerIn: '#93a2c2', runnerEdge: '#62729a', threshold: '#c9c2b4' },
+      rooms: {
+        archive:   { floor: '#e2c6a2', alt: '#d6b791', seam: '#b8946c', pattern: 'wood',   wall: '#f1e4d1', wainscot: '#d9c2a2' },
+        dev:       { floor: '#d4ddef', alt: '#cad4ea', seam: '#b4c0db', pattern: 'carpet', wall: '#e6ebf6', wainscot: '#c9d3ea' },
+        server:    { floor: '#cfd4de', alt: '#c3c9d5', seam: '#a5adbd', pattern: 'raised', wall: '#dde1e9', wainscot: '#bcc3d0' },
+        elevator:  { floor: '#e7e3dc', alt: '#dcd7cf', seam: '#f6f3ee', pattern: 'stone',  wall: '#efebe5', wainscot: '#d8d1c5' },
+        research:  { floor: '#cfe8de', alt: '#c3dfd3', seam: '#aacfc0', pattern: 'carpet', wall: '#e3f1eb', wainscot: '#bcdccf' },
+        meeting:   { floor: '#e1d9f1', alt: '#d7cdec', seam: '#c1b4df', pattern: 'carpet', wall: '#ece6f6', wainscot: '#d1c6ea' },
+        user_desk: { floor: '#efd5b7', alt: '#e5c7a5', seam: '#c9a47c', pattern: 'wood',   wall: '#f6e9da', wainscot: '#e3cbb0' }
+      },
+      rugs: {
+        archive: ['#b5654a', '#d9906d', '#f1d3b5'],
+        meeting: ['#6f58c9', '#9a86e0', '#d9d0f5'],
+        user_desk: ['#e07a5f', '#f2a488', '#fde2d2'],
+        research: ['#2f9e7a', '#63c2a0', '#d7f0e6']
+      },
+      wood: { dark: '#7b5034', mid: '#a06d49', light: '#c99766', top: '#d8a978' },
+      metal: { dark: '#2c3240', mid: '#4a5263', light: '#8a93a6', chrome: '#c9cfda' },
+      screen: { off: '#1f2633', frame: '#262c38' },
+      books: ['#c0504d', '#3f6fb5', '#7fae4f', '#e5b343', '#7b5ea7', '#3aa4bf', '#d9733a', '#2e7d6b', '#e8e2d4'],
+      leaf: ['#2f7d4a', '#3f9b5a', '#57b56c', '#7fd08a'],
+      pot: '#d07b55',
+      outline: 'rgba(30, 27, 52, 0.62)',
+      skin: '#ffd9bd',
+      outfits: {
+        claude:      { shirt: '#d97757', tie: '#6b46c1', hair: '#4a2f22', pants: '#3b3552', shoes: '#2a2433' },
+        antigravity: { shirt: '#2fb4e8', tie: '#1e3a8a', hair: '#1c2433', pants: '#1f2b4d', shoes: '#151b2e' },
+        ops:         { shirt: '#7c5cdb', tie: '#f5b942', hair: '#363b47', pants: '#2b2858', shoes: '#1d1b33' },
+        sub:         { shirt: '#14b8a6', tie: '#0f766e', hair: '#7c2d12', pants: '#334155', shoes: '#1f2937', cap: '#0f766e' }
+      }
+    };
+
   // Office 네임스페이스 및 전역 노출
   Object.assign(Office, {
+    ISO_THEME,
     TOKEN_PRICE_CONFIG,
     calculateEstimatedCost,
     formatTokenCount,

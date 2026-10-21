@@ -196,6 +196,7 @@ cmd_status() {
   else
     if [ -f "$PID_FILE" ]; then
       printf '%s\n' "${C_RED}●${C_RESET} ${C_BOLD}crashed${C_RESET}  PID 파일은 있으나 프로세스가 없습니다 (stale pid)"
+      [ -f "$LOG_FILE" ] && kv "last log" "$(tail -n 1 "$LOG_FILE")"
     else
       printf '%s\n' "${C_DIM}●${C_RESET} ${C_BOLD}stopped${C_RESET}"
     fi

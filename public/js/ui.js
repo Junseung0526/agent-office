@@ -12,9 +12,19 @@
     formatCompactTokenCount,
     calculateEstimatedCost,
     extractTaskDetail,
+    prettyToolName,
     escapeHtml,
     playSound
   } = Office;
+
+    // 값이 바뀔 때만 DOM에 쓰기 (같은 값 재기록도 mutation/스타일 무효화를 일으킴). textContent 비교라 레이아웃 강제 없음
+    function setText(el, v) {
+      v = String(v);
+      if (el && el.textContent !== v) el.textContent = v;
+    }
+    function setAttr(el, name, v) {
+      if (el.getAttribute(name) !== v) el.setAttribute(name, v);
+    }
 
     // 토큰 사용량 카드 갱신 (사용량 정보가 없으면 숨김)
     function updateTokenMeterDisplay(usage) {
@@ -35,8 +45,8 @@
 
       const modelBadge = document.getElementById('tokenModelBadge');
       if (modelBadge) {
-        modelBadge.innerText = usage.model || '-';
-        modelBadge.title = usage.model || '';
+        setText(modelBadge, usage.model || '-');
+        setAttr(modelBadge, 'title', usage.model || '');
       }
 
       const costRow = document.getElementById('tokenCostRow');
@@ -44,7 +54,7 @@
       const cost = calculateEstimatedCost(usage, usage.model);
       if (cost !== null && costRow && costVal) {
         costRow.style.display = 'inline';
-        costVal.innerText = `$${cost.toFixed(4)}`;
+        setText(costVal, `$${cost.toFixed(4)}`);
       } else if (costRow) {
         costRow.style.display = 'none';
       }
@@ -57,12 +67,12 @@
       setBar('tokenInputBar', usage.inputTokens);
       setBar('tokenOutputBar', usage.outputTokens);
       setBar('tokenCacheBar', usage.cacheTokens);
-      if (inEl) inEl.innerText = formatCompactTokenCount(usage.inputTokens);
-      if (outEl) outEl.innerText = formatCompactTokenCount(usage.outputTokens);
-      if (cacheEl) cacheEl.innerText = formatCompactTokenCount(usage.cacheTokens);
+      setText(inEl, formatCompactTokenCount(usage.inputTokens));
+      setText(outEl, formatCompactTokenCount(usage.outputTokens));
+      setText(cacheEl, formatCompactTokenCount(usage.cacheTokens));
       if (totalEl) {
-        totalEl.innerText = formatCompactTokenCount(usage.totalTokens);
-        totalEl.title = formatTokenCount(usage.totalTokens);
+        setText(totalEl, formatCompactTokenCount(usage.totalTokens));
+        setAttr(totalEl, 'title', formatTokenCount(usage.totalTokens));
       }
       updateBurnRate(Office.activeProjectKey, usage.totalTokens);
     }
@@ -89,7 +99,7 @@
         const dt = (latest.time - first.time) / 1000;
         if (dt > 0.5 && latest.total >= first.total) rate = Math.round((latest.total - first.total) / dt);
       }
-      rateVal.innerText = `${formatCompactTokenCount(rate)}/s`;
+      setText(rateVal, `${formatCompactTokenCount(rate)}/s`);
     }
 
     // H-1. 실시간 알림 관리자 (NotificationManager)
@@ -227,6 +237,8 @@
 
       markFloorQuestion(pKey, isWaiting) {
         if (!pKey) return;
+        // 매 tool_start마다 호출되므로 상태가 그대로면 층 목록을 다시 그리지 않음
+        if (this.unreadQuestionFloors.has(pKey) === Boolean(isWaiting)) return;
         if (isWaiting) {
           this.unreadQuestionFloors.add(pKey);
         } else {
@@ -312,7 +324,7 @@
       if (hasUnread) cls.push('awaiting');
       const expectedClass = cls.join(' ');
       if (card.className !== expectedClass) card.className = expectedClass;
-      card.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      setAttr(card, 'aria-selected', isActive ? 'true' : 'false');
 
       const sessions = p.sessions || [];
       const now = Date.now();
@@ -374,9 +386,9 @@
       const elAll = document.getElementById('countAll');
       const elWorking = document.getElementById('countWorking');
       const elQuestion = document.getElementById('countQuestion');
-      if (elAll) elAll.innerText = all;
-      if (elWorking) elWorking.innerText = working;
-      if (elQuestion) elQuestion.innerText = question;
+      setText(elAll, all);
+      setText(elWorking, working);
+      setText(elQuestion, question);
     }
 
     function updateHotJumpBanner() {
@@ -391,7 +403,7 @@
       if (NotificationManager.unreadQuestionFloors.has(activeProjectKey)) {
         const p = (projectsList || []).find(x => x.projectKey === activeProjectKey);
         const floorStr = p ? `${p.floor}F ` : '';
-        text.innerText = `${floorStr}내 응답 필요 (대기 중)`;
+        setText(text, `${floorStr}내 응답 필요 (대기 중)`);
         banner.style.display = 'inline-flex';
         banner.onclick = () => {
           const detail = document.getElementById('agentStatusDetail');
@@ -403,14 +415,26 @@
       const firstUnreadKey = NotificationManager.unreadQuestionFloors.values().next().value;
       const p = (projectsList || []).find(x => x.projectKey === firstUnreadKey);
       const floorStr = p ? `${p.floor}F ` : '';
-      text.innerText = `${floorStr}응답 필요`;
+      setText(text, `${floorStr}응답 필요`);
       banner.style.display = 'inline-flex';
       banner.onclick = () => {
         selectProject(firstUnreadKey);
       };
     }
 
+    // SSE(projects_update, 알림 상태 변경)가 몰려도 층 목록은 프레임당 한 번만 그림
+    let floorsRenderPending = false;
     function updateFloorsList(projects) {
+      projectsList = projects;
+      if (floorsRenderPending) return;
+      floorsRenderPending = true;
+      requestAnimationFrame(() => {
+        floorsRenderPending = false;
+        renderFloorsListNow(projectsList);
+      });
+    }
+
+    function renderFloorsListNow(projects) {
       projectsList = projects;
       const listContainer = document.getElementById('floorsList');
       if (!listContainer) return;
@@ -427,7 +451,7 @@
       updateHotJumpBanner();
 
       const footer = document.getElementById('buildingFooter');
-      if (footer) footer.innerText = `층 ${projects ? projects.length : 0}개`;
+      setText(footer, `층 ${projects ? projects.length : 0}개`);
 
       if (!projects || projects.length === 0) {
         listContainer.innerHTML = '<div class="floor-empty"><b>아직 입주한 층이 없어요</b>Claude Code나 Antigravity 세션을 실행하면 자동으로 층이 생겨요.</div>';
@@ -484,8 +508,8 @@
           };
           floorCardElements.set(pKey, card);
         }
-        card.title = `${p.floor}F: ${p.projectName} (${p.cwd})`;
-        card.setAttribute('aria-label', `${p.floor}층 ${p.projectName}`);
+        setAttr(card, 'title', `${p.floor}F: ${p.projectName} (${p.cwd})`);
+        setAttr(card, 'aria-label', `${p.floor}층 ${p.projectName}`);
 
         renderFloorCard(card, p, isActive, hasUnread);
 
@@ -543,8 +567,8 @@
       const set = (id, v, title) => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.innerText = v;
-        if (title !== undefined) el.title = title;
+        setText(el, v);
+        if (title !== undefined) setAttr(el, 'title', String(title));
       };
       const sessions = p.sessions || [];
       const latest = sessions.slice().sort((a, b) => b.lastActiveTime - a.lastActiveTime)[0];
@@ -555,7 +579,7 @@
       set('sessionPill', `세션 ${sessions.length}개`);
       set('currentEngineTag', engine === 'claude' ? 'Claude' : (engine === 'antigravity' ? 'Antigravity' : engine));
       const enginePill = document.getElementById('currentEngineTag');
-      if (enginePill) enginePill.className = `engine-pill ${engine}`;
+      if (enginePill && enginePill.className !== `engine-pill ${engine}`) enginePill.className = `engine-pill ${engine}`;
       set('journalFolder', p.cwd, p.cwd);
       set('journalSession', latest ? latest.sessionId.slice(0, 8) : '-', latest ? latest.sessionId : '');
       set('journalEngine', engine === 'claude' ? 'Claude Code' : (engine === 'antigravity' ? 'Antigravity CLI' : engine));
@@ -592,7 +616,7 @@
         resetStatusDisplayToIdle();
       }
 
-      updateFloorsList(projectsList);
+      renderFloorsListNow(projectsList);
 
       const activeCard = floorCardElements.get(pKey);
       if (activeCard && typeof activeCard.scrollIntoView === 'function') {
@@ -643,7 +667,7 @@
       } else if (ev.action === 'tool_start') {
         const detailObj = extractTaskDetail(ev.room || 'research', ev.toolName, ev.toolArgs, ev.toolSummary);
         state = 'WORKING'; label = '도구 실행';
-        rows = [['에이전트', agent], ['도구', ev.toolName], ['위치', roomName], ['작업', `${detailObj.prefix}${detailObj.text}`]];
+        rows = [['에이전트', agent], ['도구', prettyToolName(ev.toolName)], ['위치', roomName], ['작업', `${detailObj.prefix}${detailObj.text}`]];
       } else if (ev.action === 'tool_end') {
         if (ev.isError) {
           state = 'ERROR'; label = '오류';
@@ -678,14 +702,14 @@
 
     // 이벤트 로그 배지 라벨 및 색상 분류
     const LOG_KINDS = {
-      tool_start: { label: 'TOOL', cls: 'k-tool' },
-      tool_end: { label: 'RESULT', cls: 'k-result' },
-      thinking: { label: 'THINK', cls: 'k-think' },
-      ask_user: { label: 'ASK', cls: 'k-ask' },
-      turn_finish: { label: 'DONE', cls: 'k-done' },
-      user_input: { label: 'USER', cls: 'k-user' },
-      subagent_spawn: { label: 'SPAWN', cls: 'k-sub' },
-      subagent_finish: { label: 'REPORT', cls: 'k-sub' }
+      tool_start: { label: '도구', cls: 'k-tool' },
+      tool_end: { label: '결과', cls: 'k-result' },
+      thinking: { label: '생각', cls: 'k-think' },
+      ask_user: { label: '질문', cls: 'k-ask' },
+      turn_finish: { label: '완료', cls: 'k-done' },
+      user_input: { label: '지시', cls: 'k-user' },
+      subagent_spawn: { label: '위임', cls: 'k-sub' },
+      subagent_finish: { label: '보고', cls: 'k-sub' }
     };
 
     function appendLog(ev, smartScroll = true) {
@@ -695,9 +719,24 @@
       const empty = feed.querySelector('.log-empty');
       if (empty) empty.remove();
 
-      const kind = ev.isError ? { label: 'ERROR', cls: 'k-error' } : (LOG_KINDS[ev.action] || { label: (ev.action || 'EVENT').toUpperCase(), cls: 'k-system' });
+      // 성공한 결과는 새 줄 대신 해당 도구 줄에 한 줄로 붙여 일지를 짧게 유지
+      if (ev.action === 'tool_end' && !ev.isError && ev.toolUseId) {
+        const owner = feed.querySelector(`:scope > [data-tool-use-id="${CSS.escape(ev.toolUseId)}"]`);
+        if (owner && !owner.querySelector('.log-result')) {
+          const res = document.createElement('span');
+          res.className = 'log-result';
+          res.textContent = String(ev.resultSummary || '정상 완료').replace(/\s+/g, ' ').trim();
+          res.title = res.textContent;
+          owner.classList.add('is-done');
+          owner.appendChild(res);
+          return;
+        }
+      }
+
+      const kind = ev.isError ? { label: '오류', cls: 'k-error' } : (LOG_KINDS[ev.action] || { label: (ev.action || 'EVENT').toUpperCase(), cls: 'k-system' });
       const item = document.createElement('div');
       item.className = `log-item ${kind.cls}`;
+      if (ev.action === 'tool_start' && ev.toolUseId) item.dataset.toolUseId = ev.toolUseId;
       const isSubagentEvent = typeof ev.agentId === 'string' && ev.agentId.startsWith('sub_');
 
       const timeStr = new Date(ev.timestamp || Date.now()).toTimeString().slice(0, 5);
@@ -711,7 +750,7 @@
 
       const tagSpan = document.createElement('span');
       tagSpan.className = 'log-tag';
-      tagSpan.textContent = kind.label;
+      tagSpan.textContent = ev.action === 'tool_start' && ev.toolName ? `${kind.label} · ${prettyToolName(ev.toolName)}` : kind.label;
 
       item.append(timeSpan, tagSpan);
 
@@ -1117,6 +1156,7 @@
     }
 
     function updateAgentCard() {
+      if (document.hidden) return;
       const agents = Office.getProjectAgents ? Office.getProjectAgents(Office.activeProjectKey) : null;
       if (!agents) return;
       const main = agents.get('main');
@@ -1130,20 +1170,20 @@
         avatar.style.setProperty('--avatar-hair', style.hair);
       }
       const nameEl = document.getElementById('agentName');
-      if (nameEl) nameEl.innerText = main.role;
+      setText(nameEl, main.role);
 
       const st = describeAgentState(main);
       const pill = document.getElementById('agentStatusPill');
       if (pill) {
-        pill.innerText = st.text;
-        pill.className = `agent-status ${st.cls}`;
+        setText(pill, st.text);
+        if (pill.className !== `agent-status ${st.cls}`) pill.className = `agent-status ${st.cls}`;
       }
 
       let tools = 0;
       for (const ag of agents.values()) tools += ag.toolCount || 0;
       const first = Office.projectFirstEventTime ? Office.projectFirstEventTime.get(Office.activeProjectKey) : null;
       const meta = document.getElementById('agentMeta');
-      if (meta) meta.innerText = `도구 ${tools}회 · ${first ? formatDuration(Date.now() - first) : '대기 중'}`;
+      setText(meta, `도구 ${tools}회 · ${first ? formatDuration(Date.now() - first) : '대기 중'}`);
 
       const team = document.getElementById('agentTeam');
       if (team) {

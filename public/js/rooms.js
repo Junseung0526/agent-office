@@ -97,6 +97,15 @@
       return parts[parts.length - 1] || clean;
     }
 
+    // mcp__Claude_Browser__computer → "Claude Browser · computer"
+    function prettyToolName(name) {
+      if (!name || typeof name !== 'string') return '';
+      const m = name.match(/^mcp__(.+?)__(.+)$/);
+      if (!m) return name;
+      const server = m[1].replace(/^plugin_[^_]+_/, '').replace(/[_-]+/g, ' ').trim();
+      return `${server} · ${m[2].replace(/_/g, ' ')}`;
+    }
+
     // 보안 마스킹: 토큰, 패스워드, API 키, Bearer 토큰 등 민감정보를 ***로 마스킹
     function maskSensitive(str) {
       if (!str || typeof str !== 'string') return '';
@@ -191,7 +200,7 @@
       // MCP 도구명이 직접 들어온 경우 (예: mcp__notion_search)
       if (!detail && toolName && toolName.startsWith('mcp__')) {
         prefix = '⚡ ';
-        detail = toolName.replace(/^mcp__/, '');
+        detail = prettyToolName(toolName);
       }
 
       // Fallback: summary 또는 toolName
@@ -320,6 +329,7 @@
     getRoomAt,
     TOOL_PARAM_MAPPINGS,
     extractBasename,
+    prettyToolName,
     maskSensitive,
     extractTaskDetail,
     projectRoomTaskStates,
