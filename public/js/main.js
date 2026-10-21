@@ -306,7 +306,9 @@
           } else {
             // 아직 대기/실행 중인 다른 도구가 남아있다면 WORKING 유지
             if (targetAgent.activeTools.size > 0) {
-              targetAgent.state = 'WORKING';
+              // 이동 중이면 도착 후 WORKING (걷는 도중 상태를 덮어써 복도에 멈춰 서는 문제 방지)
+              if (targetAgent.state === 'WALKING') targetAgent.onArrivedAction = 'WORKING';
+              else targetAgent.state = 'WORKING';
             } else {
               // DevOps 에이전트는 도구 완료 시 기본적으로 서버실로 복귀하여 모니터링 지속
               if (targetAgent.id === 'ops') {

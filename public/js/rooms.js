@@ -286,18 +286,287 @@
     // ----------------------------------------------------
     let tickCount = 0;
 
-    // 복도 바닥 체커보드 패턴 오프스크린 베이킹 (매 프레임 fillRect 1,680회 -> drawImage 1회로 최적화)
-    const corridorCanvas = document.createElement('canvas');
-    corridorCanvas.width = 480;
-    corridorCanvas.height = 62; // 270 - FLOOR_Y
-    const corridorCtx = corridorCanvas.getContext('2d');
-    corridorCtx.fillStyle = PALETTE[30];
-    corridorCtx.fillRect(0, 0, 480, 62);
-    corridorCtx.fillStyle = PALETTE[31];
-    corridorCtx.fillRect(0, 0, 480, 3);
-    for (let y = 4; y < 62; y += 4) {
-      for (let x = 0; x < 480; x += 4) {
-        corridorCtx.fillRect(x, y, 2, 2);
+    // ----------------------------------------------------
+    // G-1. 색상 유틸 (방 테마색을 벽 베이스에 섞어 방마다 은은한 톤 차이를 준다)
+    // ----------------------------------------------------
+    function hexToRgb(hex) {
+      const n = parseInt(hex.slice(1), 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+    function mixRgb(a, b, t) {
+      return `rgb(${Math.round(a[0] + (b[0] - a[0]) * t)},${Math.round(a[1] + (b[1] - a[1]) * t)},${Math.round(a[2] + (b[2] - a[2]) * t)})`;
+    }
+    function rgba(rgb, a) {
+      return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
+    }
+
+    const WALL_TOP = 36;
+    const WAINSCOT_H = 22;
+    const WALL_BASE_RGB = [22, 28, 43];
+    const WALL_LOW_RGB = [15, 19, 30];
+
+    // ----------------------------------------------------
+    // G-2. 정적 배경 오프스크린 베이킹 (천장/벽/징두리/기둥/바닥/벽 장식) - 1회 생성 후 매 프레임 drawImage 1회
+    // ----------------------------------------------------
+    const backgroundCanvas = document.createElement('canvas');
+    backgroundCanvas.width = 480;
+    backgroundCanvas.height = 270;
+    bakeOfficeBackground(backgroundCanvas.getContext('2d'));
+
+    function bakeOfficeBackground(c) {
+      // 1. 천장 슬래브 (콘크리트 질감 점묘)
+      c.fillStyle = '#090c14';
+      c.fillRect(0, 0, 480, 270);
+      c.fillStyle = '#0d111b';
+      for (let y = 2; y < 28; y += 3) {
+        for (let x = (y % 2) * 3; x < 480; x += 7) c.fillRect(x, y, 1, 1);
+      }
+      // 천장 보 & 조명 트랙
+      c.fillStyle = '#1a2133';
+      c.fillRect(0, 28, 480, 6);
+      c.fillStyle = '#252e45';
+      c.fillRect(0, 28, 480, 1);
+      c.fillStyle = '#0b0e17';
+      c.fillRect(0, 34, 480, 2);
+
+      // 2. 외벽 (엘리베이터 좌측 / 내 자리 우측)
+      c.fillStyle = '#121725';
+      c.fillRect(0, WALL_TOP, 10, FLOOR_Y - WALL_TOP);
+      c.fillRect(472, WALL_TOP, 8, FLOOR_Y - WALL_TOP);
+
+      // 3. 방별 벽면
+      for (const key in ROOM_DEFS) {
+        const room = ROOM_DEFS[key];
+        const tint = hexToRgb(PALETTE[room.colorIdx]);
+        const x0 = room.x;
+        const w = room.w - 2;
+
+        // 상단 벽: 4단 밴딩 그라데이션 (위쪽이 어둡고 아래로 갈수록 밝아짐)
+        const wallH = FLOOR_Y - WAINSCOT_H - WALL_TOP;
+        for (let i = 0; i < 4; i++) {
+          c.fillStyle = mixRgb(WALL_BASE_RGB, tint, 0.04 + i * 0.015);
+          const y = WALL_TOP + Math.floor((wallH * i) / 4);
+          c.fillRect(x0, y, w, Math.ceil(wallH / 4) + 1);
+        }
+        // 벽지 세로 결 (아주 미세)
+        c.fillStyle = 'rgba(255,255,255,0.018)';
+        for (let x = x0 + 3; x < x0 + w; x += 6) c.fillRect(x, WALL_TOP + 16, 1, wallH - 16);
+
+        // 징두리 판넬 (하단 벽)
+        const wy = FLOOR_Y - WAINSCOT_H;
+        c.fillStyle = mixRgb(WALL_LOW_RGB, tint, 0.07);
+        c.fillRect(x0, wy, w, WAINSCOT_H);
+        c.fillStyle = mixRgb(WALL_LOW_RGB, tint, 0.03);
+        for (let x = x0 + 10; x < x0 + w - 4; x += 12) c.fillRect(x, wy + 3, 1, WAINSCOT_H - 5);
+        // 체어 레일 (하이라이트 + 그림자)
+        c.fillStyle = mixRgb([58, 68, 96], tint, 0.15);
+        c.fillRect(x0, wy - 1, w, 1);
+        c.fillStyle = 'rgba(0,0,0,0.35)';
+        c.fillRect(x0, wy, w, 1);
+        // 걸레받이
+        c.fillStyle = '#080a12';
+        c.fillRect(x0, FLOOR_Y - 2, w, 2);
+
+        // 천장 아래 그림자 (벽 상단 어둡게)
+        c.fillStyle = 'rgba(0,0,0,0.25)';
+        c.fillRect(x0, WALL_TOP, w, 2);
+        c.fillStyle = 'rgba(0,0,0,0.12)';
+        c.fillRect(x0, WALL_TOP + 2, w, 2);
+
+        // 방 사이 기둥 (입체감: 좌측 하이라이트 / 우측 그림자)
+        const px = room.x + room.w - 2;
+        c.fillStyle = '#20283b';
+        c.fillRect(px, WALL_TOP, 4, FLOOR_Y - WALL_TOP);
+        c.fillStyle = '#323d58';
+        c.fillRect(px, WALL_TOP, 1, FLOOR_Y - WALL_TOP);
+        c.fillStyle = '#121725';
+        c.fillRect(px + 3, WALL_TOP, 1, FLOOR_Y - WALL_TOP);
+        c.fillStyle = '#2a3349';
+        c.fillRect(px - 1, FLOOR_Y - 4, 6, 4); // 기둥 받침
+
+        bakeWallDecor(c, room);
+      }
+
+      // 4. 바닥: 원근감 있는 광택 타일 (가까울수록 타일이 크고 밝음)
+      const fy = FLOOR_Y;
+      c.fillStyle = '#121620';
+      c.fillRect(0, fy, 480, 270 - fy);
+      const rows = [
+        { h: 5, w: 14, base: '#151a26' },
+        { h: 7, w: 16, base: '#171c29' },
+        { h: 9, w: 19, base: '#191f2d' },
+        { h: 12, w: 23, base: '#1b2131' },
+        { h: 29, w: 28, base: '#1d2334' }
+      ];
+      let ry = fy + 2;
+      rows.forEach((row, ri) => {
+        c.fillStyle = row.base;
+        c.fillRect(0, ry, 480, row.h);
+        c.fillStyle = 'rgba(255,255,255,0.035)'; // 타일 윗변 하이라이트
+        c.fillRect(0, ry, 480, 1);
+        c.fillStyle = '#0d1018'; // 줄눈
+        const offset = (ri % 2) * Math.floor(row.w / 2);
+        for (let x = offset; x < 480; x += row.w) c.fillRect(x, ry, 1, row.h);
+        ry += row.h;
+        c.fillRect(0, ry - 1, 480, 1);
+      });
+      // 앞쪽으로 갈수록 어두워지는 비네팅 (큰 타일의 격자감 완화)
+      const fade = c.createLinearGradient(0, fy + 14, 0, 270);
+      fade.addColorStop(0, 'rgba(9,12,20,0)');
+      fade.addColorStop(1, 'rgba(9,12,20,0.75)');
+      c.fillStyle = fade;
+      c.fillRect(0, fy + 14, 480, 270 - fy - 14);
+
+      // 벽-바닥 경계 립 & 벽 그림자
+      c.fillStyle = '#2b3348';
+      c.fillRect(0, fy, 480, 1);
+      c.fillStyle = '#0a0d15';
+      c.fillRect(0, fy + 1, 480, 1);
+      c.fillStyle = 'rgba(0,0,0,0.22)';
+      c.fillRect(0, fy + 2, 480, 3);
+
+      // 바닥에 비친 방 색 반사 (아주 은은하게)
+      for (const key in ROOM_DEFS) {
+        const room = ROOM_DEFS[key];
+        const tint = hexToRgb(PALETTE[room.colorIdx]);
+        const g = c.createLinearGradient(0, fy + 2, 0, fy + 26);
+        g.addColorStop(0, rgba(tint, 0.06));
+        g.addColorStop(1, rgba(tint, 0));
+        c.fillStyle = g;
+        c.fillRect(room.x + 4, fy + 2, room.w - 10, 24);
+      }
+    }
+
+    // 방별 정적 벽 장식 (소품이 놓이지 않는 벽 중단 공간을 채움)
+    function bakeWallDecor(c, room) {
+      const rx = room.x;
+      if (room.id === 'elevator') {
+        // 층 표시등 패널
+        c.fillStyle = '#0a0d16';
+        c.fillRect(rx + 16, 138, 20, 8);
+        c.fillStyle = '#2a3349';
+        c.fillRect(rx + 16, 138, 20, 1);
+        // 호출 버튼 패널
+        c.fillStyle = '#2a3349';
+        c.fillRect(rx + 42, 176, 4, 8);
+        c.fillStyle = '#526084';
+        c.fillRect(rx + 43, 177, 2, 2);
+        c.fillRect(rx + 43, 181, 2, 2);
+      } else if (room.id === 'archive') {
+        // 액자 (도면)
+        c.fillStyle = '#3a2a1c';
+        c.fillRect(rx + 8, 64, 24, 18);
+        c.fillStyle = '#1e3a5f';
+        c.fillRect(rx + 10, 66, 20, 14);
+        c.fillStyle = 'rgba(147,197,253,0.55)';
+        c.fillRect(rx + 12, 68, 10, 1);
+        c.fillRect(rx + 12, 68, 1, 9);
+        c.fillRect(rx + 12, 76, 14, 1);
+        c.fillRect(rx + 21, 68, 1, 5);
+        c.fillRect(rx + 21, 72, 6, 1);
+        // 벽시계 테두리 (바늘은 실시간 동적 렌더링)
+        c.fillStyle = '#3a4560';
+        c.beginPath(); c.arc(rx + 46, 73, 8, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#e2e8f0';
+        c.beginPath(); c.arc(rx + 46, 73, 7, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#64748b';
+        c.fillRect(rx + 46, 67, 1, 1); c.fillRect(rx + 46, 79, 1, 1);
+        c.fillRect(rx + 40, 73, 1, 1); c.fillRect(rx + 52, 73, 1, 1);
+      } else if (room.id === 'dev') {
+        // 칸반 보드 (TODO / DOING / DONE)
+        c.fillStyle = '#2a3349';
+        c.fillRect(rx + 6, 62, 50, 32);
+        c.fillStyle = '#1e293b';
+        c.fillRect(rx + 7, 63, 48, 30);
+        c.fillStyle = '#334155';
+        c.fillRect(rx + 23, 65, 1, 26);
+        c.fillRect(rx + 39, 65, 1, 26);
+        const notes = [
+          [9, 67, '#fde68a'], [9, 74, '#fbcfe8'], [9, 81, '#fde68a'],
+          [26, 67, '#bae6fd'], [26, 74, '#fde68a'],
+          [42, 67, '#bbf7d0'], [42, 74, '#bbf7d0'], [42, 81, '#bbf7d0']
+        ];
+        for (const [nx, ny, col] of notes) {
+          c.fillStyle = col;
+          c.fillRect(rx + nx, ny, 11, 6);
+          c.fillStyle = 'rgba(15,23,42,0.35)';
+          c.fillRect(rx + nx + 2, ny + 2, 7, 1);
+        }
+        // 선반 위 머그컵 & 책
+        c.fillStyle = '#323c59';
+        c.fillRect(rx + 8, 110, 30, 2);
+        c.fillStyle = '#ef4444'; c.fillRect(rx + 10, 102, 3, 8);
+        c.fillStyle = '#38bdf8'; c.fillRect(rx + 13, 103, 3, 7);
+        c.fillStyle = '#f59e0b'; c.fillRect(rx + 16, 101, 3, 9);
+        c.fillStyle = '#e2e8f0'; c.fillRect(rx + 30, 105, 5, 5);
+        c.fillRect(rx + 35, 106, 1, 3);
+      } else if (room.id === 'server') {
+        // 케이블 트레이 & 늘어진 케이블
+        c.fillStyle = '#2a3349';
+        c.fillRect(rx + 2, 58, room.w - 6, 3);
+        c.fillStyle = '#3a4560';
+        c.fillRect(rx + 2, 58, room.w - 6, 1);
+        const cables = [['#0ea5e9', 12], ['#22c55e', 16], ['#f59e0b', 42], ['#a855f7', 46]];
+        for (const [col, cx] of cables) {
+          c.fillStyle = col;
+          c.fillRect(rx + cx, 61, 1, FLOOR_Y - 60 - 61);
+        }
+        // 패치 패널 (포트 LED는 동적)
+        c.fillStyle = '#0b0e17';
+        c.fillRect(rx + 8, 72, 48, 12);
+        c.fillStyle = '#2a3349';
+        c.fillRect(rx + 8, 72, 48, 1);
+        c.fillStyle = '#1a2133';
+        for (let i = 0; i < 10; i++) c.fillRect(rx + 10 + i * 4.5, 76, 3, 3);
+      } else if (room.id === 'research') {
+        // 월드맵 대형 디스플레이 (핑은 동적)
+        c.fillStyle = '#2a3349';
+        c.fillRect(rx + 6, 60, 54, 34);
+        c.fillStyle = '#070b14';
+        c.fillRect(rx + 8, 62, 50, 30);
+        c.fillStyle = 'rgba(168,85,247,0.45)';
+        const land = [
+          [12, 66, 8, 5], [14, 71, 6, 4], [17, 75, 3, 6],   // 아메리카
+          [29, 66, 6, 4], [30, 71, 5, 7],                    // 유럽/아프리카
+          [37, 65, 12, 6], [41, 71, 7, 3], [49, 79, 5, 3]    // 아시아/오세아니아
+        ];
+        for (const [lx, ly, lw, lh] of land) {
+          for (let y = ly; y < ly + lh; y += 2) {
+            for (let x = lx; x < lx + lw; x += 2) c.fillRect(rx + x, y, 1, 1);
+          }
+        }
+        c.fillStyle = 'rgba(168,85,247,0.15)';
+        c.fillRect(rx + 8, 77, 50, 1);
+        // 스탠드 다리
+        c.fillStyle = '#2a3349';
+        c.fillRect(rx + 32, 94, 2, 4);
+      } else if (room.id === 'meeting') {
+        // 화이트보드 옆 벽걸이 시간표
+        c.fillStyle = '#2a3349';
+        c.fillRect(rx + 22, 98, 24, 14);
+        c.fillStyle = '#cbd5e1';
+        c.fillRect(rx + 23, 99, 22, 12);
+        c.fillStyle = '#94a3b8';
+        for (let y = 101; y < 110; y += 3) c.fillRect(rx + 25, y, 18, 1);
+        c.fillStyle = '#ef4444';
+        c.fillRect(rx + 25, 101, 5, 2);
+      } else if (room.id === 'user_desk') {
+        // 창문 프레임 (하늘은 시간대 연동 동적 렌더링)
+        c.fillStyle = '#2a3349';
+        c.fillRect(rx + 8, 60, 46, 36);
+        c.fillStyle = '#3a4560';
+        c.fillRect(rx + 8, 60, 46, 1);
+        c.fillStyle = '#1a2133';
+        c.fillRect(rx + 7, 96, 48, 3); // 창틀
+        // 액자 사진
+        c.fillStyle = '#c27349';
+        c.fillRect(rx + 14, 110, 12, 10);
+        c.fillStyle = '#7dd3fc';
+        c.fillRect(rx + 15, 111, 10, 8);
+        c.fillStyle = '#22c55e';
+        c.fillRect(rx + 15, 116, 10, 3);
+        c.fillStyle = '#fef08a';
+        c.fillRect(rx + 21, 112, 2, 2);
       }
     }
 
@@ -326,83 +595,99 @@
       });
     }
 
+    // ----------------------------------------------------
+    // G-3. 방 조명: 에이전트가 방에서 일하는 동안 천장 조명이 켜지고 서서히 꺼짐
+    // ----------------------------------------------------
+    const roomLightLevels = {};
+    const roomTintRgb = {};
+    for (const key in ROOM_DEFS) {
+      roomLightLevels[key] = 0;
+      roomTintRgb[key] = hexToRgb(PALETTE[ROOM_DEFS[key].colorIdx]);
+    }
+    const LIT_STATES = new Set(['WORKING', 'THINKING', 'ASKING', 'REPORTING', 'PONDERING', 'ERROR']);
+
+    function updateRoomLights() {
+      const occupied = new Set();
+      const agents = Office.getProjectAgents ? Office.getProjectAgents(Office.activeProjectKey) : null;
+      if (agents) {
+        for (const ag of agents.values()) {
+          if (LIT_STATES.has(ag.state)) occupied.add(ag.currentRoom);
+        }
+      }
+      for (const key in roomLightLevels) {
+        const target = occupied.has(key) ? 1 : 0;
+        const speed = target ? 0.08 : 0.025; // 켜질 땐 빠르게, 꺼질 땐 천천히
+        roomLightLevels[key] += (target - roomLightLevels[key]) * speed;
+      }
+    }
+
+    function drawRoomLight(ctx, room) {
+      const level = roomLightLevels[room.id];
+      const lampX = Math.round(room.x + (room.w - 2) / 2) - 6;
+      // 천장 매입등 (꺼져 있을 땐 어두운 갓만 보임)
+      ctx.fillStyle = '#1a2133';
+      ctx.fillRect(lampX, 52, 12, 2);
+      if (level < 0.02) return;
+      ctx.fillStyle = `rgba(255,247,222,${(0.25 + 0.75 * level).toFixed(3)})`;
+      ctx.fillRect(lampX + 1, 53, 10, 1);
+      const tint = roomTintRgb[room.id];
+      const cx = room.x + (room.w - 2) / 2;
+      const left = room.x + 1;
+      const right = room.x + room.w - 3;
+
+      // 천장 조명 원뿔
+      const g = ctx.createLinearGradient(0, 53, 0, FLOOR_Y);
+      g.addColorStop(0, rgba(tint, 0.26 * level));
+      g.addColorStop(1, rgba(tint, 0.05 * level));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(cx - 9, 53);
+      ctx.lineTo(cx + 9, 53);
+      ctx.lineTo(right, FLOOR_Y);
+      ctx.lineTo(left, FLOOR_Y);
+      ctx.closePath();
+      ctx.fill();
+
+      // 바닥 빛 웅덩이
+      ctx.fillStyle = rgba(tint, 0.22 * level);
+      ctx.beginPath();
+      ctx.ellipse(cx, FLOOR_Y + 5, (room.w - 6) / 2, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 간판 발광
+      ctx.fillStyle = rgba(tint, 0.22 * level);
+      ctx.fillRect(room.x + 5, 39, room.w - 10, 12);
+    }
+
     function drawEnvironmentPixels(ctx) {
       tickCount++;
 
-      // 1. 천장 & 상단 벽
-      ctx.fillStyle = PALETTE[1];
-      ctx.fillRect(0, 0, 480, 270);
+      // 1. 정적 배경 (천장, 벽, 징두리, 기둥, 바닥, 벽 장식)
+      ctx.drawImage(backgroundCanvas, 0, 0);
 
-      // 천장 몰딩 & 전선 트랙
-      ctx.fillStyle = PALETTE[2];
-      ctx.fillRect(0, 28, 480, 6);
-      ctx.fillStyle = PALETTE[4];
-      ctx.fillRect(0, 34, 480, 2);
+      // 2. 실제 시간대 연동 창문 (내 자리, 30초 캐싱)
+      drawWindowSky(ctx, ROOM_DEFS.user_desk.x + 10, 62, 42, 32);
 
-      // 2. 실제 시간대 연동 창문 (30초 캐싱)
-      const currentHour = getCachedHour();
-      let skyColor = PALETTE[23];
-      let isNight = false;
-      let isSunset = false;
-
-      if (currentHour >= 17 && currentHour < 20) {
-        skyColor = PALETTE[11];
-        isSunset = true;
-      } else if (currentHour >= 20 || currentHour < 6) {
-        skyColor = PALETTE[1];
-        isNight = true;
-      }
-
-      ctx.fillStyle = PALETTE[2];
-      ctx.fillRect(344, 42, 56, 42);
-      ctx.fillStyle = skyColor;
-      ctx.fillRect(346, 44, 52, 38);
-
-      if (isNight) {
-        ctx.fillStyle = PALETTE[7];
-        ctx.fillRect(352, 48, 1, 1);
-        ctx.fillRect(368, 52, 1, 1);
-        ctx.fillRect(384, 46, 1, 1);
-        ctx.fillStyle = PALETTE[17];
-        ctx.fillRect(376, 48, 4, 4);
-        ctx.fillStyle = PALETTE[0];
-        ctx.fillRect(346, 68, 14, 14);
-        ctx.fillRect(362, 62, 16, 20);
-        ctx.fillRect(380, 65, 18, 17);
-        ctx.fillStyle = (tickCount % 60 < 30) ? PALETTE[13] : PALETTE[8];
-        ctx.fillRect(366, 66, 2, 2);
-        ctx.fillRect(372, 70, 2, 2);
-      } else if (isSunset) {
-        ctx.fillStyle = PALETTE[14];
-        ctx.fillRect(346, 70, 52, 12);
-      } else {
-        ctx.fillStyle = PALETTE[7];
-        ctx.fillRect(355, 52, 12, 4);
-        ctx.fillRect(358, 50, 6, 2);
-      }
-      ctx.fillStyle = PALETTE[2];
-      ctx.fillRect(371, 44, 2, 38);
-      ctx.fillRect(346, 62, 52, 2);
-
-      // 3. 복도 바닥 (오프스크린 캔버스 1회 drawImage 복사)
-      ctx.drawImage(corridorCanvas, 0, FLOOR_Y);
-
-      // 4. 각 방 소품 및 기둥 드로잉 (간판 텍스트는 별도 고해상도 패스)
+      // 3. 각 방 소품 및 동적 장식 (간판 텍스트는 별도 고해상도 패스)
+      updateRoomLights();
       for (const key in ROOM_DEFS) {
         const room = ROOM_DEFS[key];
         drawRoomInteriorPixels(ctx, room);
       }
+      for (const key in ROOM_DEFS) {
+        drawRoomLight(ctx, ROOM_DEFS[key]);
+      }
 
-      // 5. 비상구 EXIT 유도등
+      // 4. 비상구 EXIT 유도등
       ctx.fillStyle = PALETTE[1];
-      ctx.fillRect(26, 36, 18, 8);
+      ctx.fillRect(25, 26, 18, 8);
       ctx.fillStyle = PALETTE[19];
-      ctx.fillRect(27, 37, 16, 6);
+      ctx.fillRect(26, 27, 16, 6);
       ctx.fillStyle = PALETTE[7];
       ctx.font = '6px monospace';
-      ctx.fillText('EXIT', 29, 42);
+      ctx.fillText('EXIT', 28, 32);
 
-      // 6. 공기 중 먼지 입자 (사전 계산된 p.color 재사용, prefers-reduced-motion 시 이동 정지)
+      // 5. 공기 중 먼지 입자 (사전 계산된 p.color 재사용, prefers-reduced-motion 시 이동 정지)
       const isReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       for (const p of dustParticles) {
         if (!isReducedMotion) {
@@ -418,16 +703,65 @@
       }
     }
 
+    function drawWindowSky(ctx, x, y, w, h) {
+      const currentHour = getCachedHour();
+      const isNight = currentHour >= 20 || currentHour < 6;
+      const isSunset = currentHour >= 17 && currentHour < 20;
+      const isDawn = currentHour >= 6 && currentHour < 9;
+
+      const g = ctx.createLinearGradient(0, y, 0, y + h);
+      if (isNight) { g.addColorStop(0, '#020617'); g.addColorStop(1, '#1e1b4b'); }
+      else if (isSunset) { g.addColorStop(0, '#7c2d12'); g.addColorStop(1, '#f59e0b'); }
+      else if (isDawn) { g.addColorStop(0, '#6d28d9'); g.addColorStop(1, '#fda4af'); }
+      else { g.addColorStop(0, '#0369a1'); g.addColorStop(1, '#7dd3fc'); }
+      ctx.fillStyle = g;
+      ctx.fillRect(x, y, w, h);
+
+      if (isNight) {
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(x + 6, y + 4, 1, 1);
+        ctx.fillRect(x + 22, y + 8, 1, 1);
+        ctx.fillRect(x + 34, y + 3, 1, 1);
+        ctx.fillStyle = '#fef9c3';
+        ctx.fillRect(x + 30, y + 5, 4, 4); // 달
+      } else if (!isSunset) {
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillRect(x + 8, y + 7, 10, 3); // 구름
+        ctx.fillRect(x + 10, y + 5, 5, 2);
+      }
+
+      // 도시 스카이라인 실루엣
+      ctx.fillStyle = isNight ? '#0b1020' : 'rgba(15,23,42,0.75)';
+      ctx.fillRect(x, y + h - 9, 8, 9);
+      ctx.fillRect(x + 9, y + h - 15, 9, 15);
+      ctx.fillRect(x + 19, y + h - 11, 7, 11);
+      ctx.fillRect(x + 27, y + h - 18, 8, 18);
+      ctx.fillRect(x + 36, y + h - 8, 6, 8);
+      if (isNight) {
+        ctx.fillStyle = (tickCount % 90 < 60) ? '#fbbf24' : '#78350f';
+        ctx.fillRect(x + 12, y + h - 12, 1, 1);
+        ctx.fillRect(x + 30, y + h - 14, 1, 1);
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillRect(x + 15, y + h - 8, 1, 1);
+        ctx.fillRect(x + 29, y + h - 9, 1, 1);
+      }
+
+      // 창살
+      ctx.fillStyle = '#2a3349';
+      ctx.fillRect(x + Math.floor(w / 2), y, 2, h);
+      ctx.fillRect(x, y + Math.floor(h / 2), w, 1);
+      // 유리 반사
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(x + 2, y + 2, 1, h - 6);
+      ctx.fillRect(x + 3, y + 2, 1, 4);
+    }
+
     function drawRoomInteriorPixels(ctx, room) {
       const rx = room.x;
       const rw = room.w;
 
-      // 방 구분 기둥
-      ctx.fillStyle = PALETTE[2];
-      ctx.fillRect(rx + rw - 2, 36, 4, FLOOR_Y - 36);
-
-      // 상단 방 네온 간판 박스 (텍스트는 고해상도 패스에서 선명하게 렌더링)
-      ctx.fillStyle = PALETTE[1];
+      // 상단 방 간판 박스 (텍스트는 고해상도 패스에서 선명하게 렌더링)
+      ctx.fillStyle = '#0a0d16';
       ctx.fillRect(rx + 4, 38, rw - 8, 14);
       ctx.strokeStyle = PALETTE[room.colorIdx];
       ctx.lineWidth = 1;
@@ -436,11 +770,21 @@
       // 방별 소품
       if (room.id === 'elevator') {
         ctx.drawImage(PROPS.elevator, rx + 10, FLOOR_Y - 56);
+        // 층 표시등: 엘리베이터 이용 중(누군가 엘리베이터 방에 있음)이면 점등
+        const busy = roomLightLevels.elevator > 0.3;
+        ctx.fillStyle = busy ? '#f59e0b' : '#3f2a0a';
+        ctx.fillRect(rx + 19, 141, 3, 3);
+        ctx.fillStyle = busy && tickCount % 40 < 20 ? '#fbbf24' : '#3f2a0a';
+        ctx.fillRect(rx + 25, 140, 2, 1);
+        ctx.fillRect(rx + 24, 141, 4, 1);
+        ctx.fillRect(rx + 30, 142, 4, 1);
+        ctx.fillRect(rx + 31, 143, 2, 1);
       }
       else if (room.id === 'archive') {
         ctx.drawImage(PROPS.bookshelf, rx + 4, FLOOR_Y - 64);
         ctx.drawImage(PROPS.ladder, rx + 36, FLOOR_Y - 48);
         ctx.drawImage(PROPS.cabinet, rx + rw - 22, FLOOR_Y - 24);
+        drawClockHands(ctx, rx + 46, 73);
       }
       else if (room.id === 'dev') {
         ctx.drawImage(PROPS.devDesk, rx + 12, FLOOR_Y - 32);
@@ -468,8 +812,13 @@
         ctx.fillRect(rx + 26, FLOOR_Y - 32, 2, 2);
         ctx.fillRect(rx + 54, FLOOR_Y - 22, 2, 2);
 
-        ctx.fillStyle = (tickCount % 20 < 10) ? PALETTE[14] : PALETTE[8];
-        ctx.fillRect(rx + rw / 2 - 2, 54, 4, 4);
+        // 패치 패널 포트 LED (작업 중이면 트래픽 증가)
+        const busy = roomLightLevels.server > 0.3;
+        for (let i = 0; i < 10; i++) {
+          const on = ((tickCount >> (busy ? 2 : 4)) + i * 7) % 5 < (busy ? 3 : 1);
+          ctx.fillStyle = on ? (i % 3 === 0 ? '#f59e0b' : '#22c55e') : '#14532d';
+          ctx.fillRect(rx + 11 + Math.round(i * 4.5), 80, 1, 1);
+        }
       }
       else if (room.id === 'research') {
         ctx.drawImage(PROPS.multiScreen, rx + 12, FLOOR_Y - 34);
@@ -484,6 +833,20 @@
         ctx.beginPath();
         ctx.arc(rx + rw - 13, FLOOR_Y - 16, 4, 0, Math.PI * 2);
         ctx.fill();
+
+        // 월드맵 핑 (작업 중이면 여러 지점이 동시에 깜빡임)
+        const pings = [[16, 68], [33, 69], [44, 67], [51, 80], [19, 77]];
+        const busy = roomLightLevels.research > 0.3;
+        const phase = Math.floor(tickCount / 20);
+        pings.forEach(([px, py], i) => {
+          if (!busy && (phase + i) % 5 !== 0) return;
+          const r = (tickCount + i * 9) % 20 < 10;
+          ctx.fillStyle = r ? '#f0abfc' : 'rgba(240,171,252,0.4)';
+          ctx.fillRect(rx + px, py, 2, 2);
+        });
+        // 스캔 라인
+        ctx.fillStyle = 'rgba(168,85,247,0.25)';
+        ctx.fillRect(rx + 8, 62 + (Math.floor(tickCount / 3) % 30), 50, 1);
       }
       else if (room.id === 'meeting') {
         ctx.drawImage(PROPS.whiteboard, rx + 10, 56);
@@ -517,6 +880,28 @@
           ctx.fillRect(rx + 24, FLOOR_Y - 36 + bounce, 4, 2);
         }
       }
+    }
+
+    // 자료실 벽시계: 실제 시각 시/분침
+    let clockCache = { t: 0, h: 0, m: 0 };
+    function drawClockHands(ctx, cx, cy) {
+      const nowMs = Date.now();
+      if (nowMs - clockCache.t > 10000) {
+        const d = new Date();
+        clockCache = { t: nowMs, h: (d.getHours() % 12) + d.getMinutes() / 60, m: d.getMinutes() };
+      }
+      const ha = (clockCache.h / 12) * Math.PI * 2 - Math.PI / 2;
+      const ma = (clockCache.m / 60) * Math.PI * 2 - Math.PI / 2;
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx + 0.5, cy + 0.5);
+      ctx.lineTo(cx + 0.5 + Math.cos(ha) * 3.5, cy + 0.5 + Math.sin(ha) * 3.5);
+      ctx.moveTo(cx + 0.5, cy + 0.5);
+      ctx.lineTo(cx + 0.5 + Math.cos(ma) * 5.5, cy + 0.5 + Math.sin(ma) * 5.5);
+      ctx.stroke();
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(cx, cy, 1, 1);
     }
 
     // ----------------------------------------------------

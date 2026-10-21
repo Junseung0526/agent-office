@@ -322,6 +322,14 @@
           this.speechBubbles = this.speechBubbles.filter(b => now < b.expiresAt);
         }
 
+        // 안전장치: 정지 상태인데 목적지에 도착하지 못했다면 다시 걸어서 이동 (복도 한가운데 고착 방지)
+        if (this.state !== 'WALKING' && this.state !== 'LEAVING' && this.state !== 'GONE' &&
+            Math.abs(this.targetX - this.x) > 3) {
+          this.onArrivedAction = this.state;
+          this.state = 'WALKING';
+          this.facing = this.targetX > this.x ? 1 : -1;
+        }
+
         // 이동 로직
         if (this.state === 'WALKING' || this.state === 'LEAVING') {
           const dx = this.targetX - this.x;
