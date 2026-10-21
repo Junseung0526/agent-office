@@ -1,18 +1,17 @@
 /**
  * 에이전트 오피스 (Agent Office) - 에이전트 캐릭터 모듈 (public/js/agent.js)
- * PixelAgent 클래스, 상태 머신 및 오프스크린 스프라이트 Blitting
+ * Agent 클래스: 상태 머신, 복도를 거치는 2D 경로 이동, 말풍선 스택 (그리기는 iso.js 담당)
  */
 
 (function(window) {
   'use strict';
 
   const Office = window.Office = window.Office || {};
-  const {
-    ROOM_DEFS,
-    FLOOR_Y,
-    SPRITE_FRAMES,
-    PALETTE
-  } = Office;
+  const { ROOM_DEFS, WORLD, getRoomAt } = Office;
+
+  const WALK_SPEED = 3.4; // 타일/초
+  // 같은 방에 여러 명이 있을 때 겹치지 않도록 자리 분산 (main, ops, 서브에이전트 순)
+  const SLOT_VECTORS = [[0, 0], [1.3, 0.35], [-1.3, 0.35], [0.1, 1.35], [1.4, 1.5], [-1.3, 1.5], [2.4, 0.9], [-2.4, 0.9]];
 
     // ----------------------------------------------------
     // 에이전트 밈(Meme) & 직장인/개발자 공감 대사 105선
@@ -147,86 +146,74 @@
     ];
 
     // ----------------------------------------------------
-    // F. 캐릭터 클래스 (오프스크린 스프라이트 Blitting & 상태머신)
+    // F. 캐릭터 클래스 (상태머신 & 경로 이동)
     // ----------------------------------------------------
-    class PixelAgent {
+    class Agent {
       constructor(id, role, type = 'main', engine = 'antigravity') {
         this.id = id;
         this.role = role || '메인 에이전트';
         this.type = type; // 'main' | 'sub'
         this.engine = engine; // 'antigravity' | 'claude'
 
-        this.x = ROOM_DEFS.meeting.targetX;
-        this.y = FLOOR_Y;
-        this.targetX = ROOM_DEFS.meeting.targetX;
+        this.slotIndex = id === 'main' ? 0 : (id === 'ops' ? 1 : 2);
+        const spot = this.spotFor('meeting');
+        this.x = spot[0];
+        this.y = spot[1];
+        this.path = [];
         this.currentRoom = 'meeting';
 
         this.state = 'IDLE'; // IDLE, WALKING, WORKING, THINKING, PONDERING, ERROR, ASKING, REPORTING, LEAVING, GONE
-        this.facing = 1; // 1: 우측, -1: 좌측
-        this.speed = 1.6;
+        this.facing = 1;     // 1: 화면 오른쪽, -1: 화면 왼쪽
+        this.speed = WALK_SPEED;
 
-        this.animTimer = 0;
+        this.animTimer = Math.random() * 10;
         this.memeTimer = Math.random() * 5;
-        this.nextMemeInterval = 8 + Math.random() * 8; // 8~16초 후 혼자서 첫 밈 대사 발화
+        this.nextMemeInterval = 10 + Math.random() * 14;
         this.lastEventTime = Date.now();
-        this.speechBubbles = []; // 스택형 말풍선 목록 [{ id, type, text, createdAt, expiresAt, duration }]
+        this.speechBubbles = []; // [{ id, type, text, createdAt, expiresAt, duration }]
         this.onArrivedAction = 'WORKING';
         this.onArrivedSpeech = null;
-
-        // 퇴근 예약 타이머 참조
         this.leaveTimer = null;
 
         // 병렬 도구 추적 맵: toolKey -> { toolName, room, startTime }
         this.activeTools = new Map();
         this.lastToolActivityTime = Date.now();
-
-        // ERROR 상태 자동 복구 타이머 추적
         this.errorStartTime = null;
 
-        // 엘리베이터 문 애니메이션 상태
-        this.elevatorDoorOpen = 0; // 0 ~ 1
-
-        // 소속 층(프로젝트) 키 및 방 내부 자리 오프셋 (서브에이전트 여러 명이 겹치지 않도록 분산)
         this.projectKey = null;
-        this.slotOffset = 0;
+        this.toolCount = 0;
+        this.startedAt = Date.now();
       }
 
-      // 하위 호환용 단일 speechBubble getter/setter
+      // 방 안의 작업 자리 좌표 (slotIndex에 따라 분산)
+      spotFor(roomId) {
+        const room = ROOM_DEFS[roomId] || ROOM_DEFS.research;
+        const v = SLOT_VECTORS[this.slotIndex % SLOT_VECTORS.length] || [0, 0];
+        if (room.id === 'elevator') return [room.spot[0], room.spot[1] + v[0] * 0.8];
+        return [room.spot[0] + v[0], room.spot[1] + v[1]];
+      }
+
       get speechBubble() {
         return this.speechBubbles.length > 0 ? this.speechBubbles[this.speechBubbles.length - 1] : null;
       }
       set speechBubble(val) {
-        if (!val) {
-          this.speechBubbles = [];
-        } else {
-          this.speechBubbles = [val];
-        }
+        this.speechBubbles = val ? [val] : [];
       }
 
       setSpeech(type, text, durationMs = 4500) {
         if (!text) return;
         const now = Date.now();
         const last = this.speechBubbles[this.speechBubbles.length - 1];
-        // 동일한 텍스트가 연속으로 들어오면 수명만 갱신
         if (last && last.text === text && last.type === type) {
           last.expiresAt = Math.max(last.expiresAt, now + durationMs);
           last.duration = durationMs;
           return;
         }
-
         this.speechBubbles.push({
           id: `${now}_${Math.random().toString(36).slice(2, 6)}`,
-          type,
-          text,
-          createdAt: now,
-          duration: durationMs,
-          expiresAt: now + durationMs
+          type, text, createdAt: now, duration: durationMs, expiresAt: now + durationMs
         });
-
-        // 위로 쌓이는 말풍선 스택은 최대 3개(화면 가림 방지 및 최적 가독성) 유지
-        while (this.speechBubbles.length > 3) {
-          this.speechBubbles.shift();
-        }
+        while (this.speechBubbles.length > 2) this.speechBubbles.shift();
       }
 
       sayRandomMeme() {
@@ -234,13 +221,12 @@
         let meme;
         if (this.id === 'ops') {
           const opsMemes = [
-            "🖥️ 서버 랙 온도 정상입니다 👍",
-            "⚡ 백그라운드 프로세스 무중단 감시 중!",
-            "🔥 병렬 연산 파이프라인 풀가동 완료",
-            "🛡️ 메모리 누수 감지 시스템 올 그린 (Green)!",
-            "📊 실시간 SSE 스트림 버퍼 안정적 동기화",
-            "🚀 메인 에이전트님, 인프라는 제가 지킵니다!",
-            "⚙️ 데몬 프로세스 상태 최적: 이상 무!"
+            '🖥️ 서버 랙 온도 정상입니다 👍',
+            '⚡ 백그라운드 프로세스 무중단 감시 중!',
+            '🔥 병렬 연산 파이프라인 풀가동 완료',
+            '🛡️ 메모리 누수 감지 시스템 올 그린!',
+            '🚀 메인 에이전트님, 인프라는 제가 지킵니다!',
+            '⚙️ 데몬 프로세스 상태 최적: 이상 무!'
           ];
           meme = Math.random() < 0.65
             ? opsMemes[Math.floor(Math.random() * opsMemes.length)]
@@ -250,7 +236,7 @@
         }
         this.setSpeech('meme', meme, 4200);
         this.memeTimer = 0;
-        this.nextMemeInterval = 9 + Math.random() * 9;
+        this.nextMemeInterval = 18 + Math.random() * 18;
         if (Office.playSound) Office.playSound('think');
       }
 
@@ -258,7 +244,6 @@
         this.speechBubbles = [];
       }
 
-      // 퇴근 타이머 취소 (보고 중 새 작업 수신 시 퇴근 방지)
       cancelLeaving() {
         if (this.leaveTimer) {
           clearTimeout(this.leaveTimer);
@@ -266,12 +251,36 @@
         }
       }
 
-      // GONE 상태에서 새 이벤트 수신 시 엘리베이터에서 출근 처리 (좌표 고착 방지)
+      // 목적지까지의 경로: 현재 방 문 -> 복도 -> 목적지 방 문 -> 자리
+      planPath(roomId, target) {
+        const from = getRoomAt(this.x, this.y);
+        const dest = ROOM_DEFS[roomId];
+        const path = [];
+        const inHall = this.y >= WORLD.hallY0 && this.y < WORLD.hallY1;
+        if (from && dest && from.id === dest.id) {
+          path.push(target);
+          return path;
+        }
+        if (from && !inHall) {
+          path.push([from.doorX, from.row === 'back' ? WORLD.hallY0 - 0.6 : WORLD.hallY1 + 0.6]);
+          path.push([from.doorX, WORLD.hallMidY]);
+        }
+        if (dest) {
+          path.push([dest.doorX, WORLD.hallMidY]);
+          path.push([dest.doorX, dest.row === 'back' ? WORLD.hallY0 - 0.6 : WORLD.hallY1 + 0.6]);
+        }
+        path.push(target);
+        return path;
+      }
+
+      // GONE 상태에서 새 이벤트 수신 시 엘리베이터에서 출근 처리
       reviveIfGone(targetRoomId = 'meeting') {
         if (this.state === 'GONE' || this.state === 'LEAVING') {
           this.cancelLeaving();
-          this.x = ROOM_DEFS.elevator.targetX;
-          this.y = FLOOR_Y;
+          const e = ROOM_DEFS.elevator.spot;
+          this.x = e[0];
+          this.y = e[1];
+          this.path = [];
           this.state = 'IDLE';
           this.moveToRoom(targetRoomId, 'WORKING');
           this.setSpeech('report', '👋 출근했습니다!');
@@ -286,372 +295,183 @@
         this.cancelLeaving();
         this.activeTools.clear();
         this.currentRoom = 'elevator';
-        this.targetX = ROOM_DEFS.elevator.targetX;
+        this.path = this.planPath('elevator', ROOM_DEFS.elevator.spot.slice());
         this.onArrivedSpeech = null;
         if (speech) this.setSpeech(speech.type, speech.text, speech.duration || 4500);
         this.state = 'LEAVING';
-        this.facing = this.targetX > this.x ? 1 : -1;
       }
 
       moveToRoom(roomId, onArrivedAction = 'WORKING', onArrivedSpeech = null) {
         this.cancelLeaving();
         const room = ROOM_DEFS[roomId] || ROOM_DEFS.research;
+        const target = this.spotFor(room.id);
         this.currentRoom = room.id;
-        this.targetX = room.targetX + (room.id === 'elevator' ? 0 : this.slotOffset);
         this.onArrivedAction = onArrivedAction;
         this.onArrivedSpeech = onArrivedSpeech;
 
-        if (Math.abs(this.targetX - this.x) > 3) {
+        if (Math.hypot(target[0] - this.x, target[1] - this.y) > 0.15) {
+          this.path = this.planPath(room.id, target);
           this.state = 'WALKING';
-          this.facing = this.targetX > this.x ? 1 : -1;
         } else {
-          this.x = this.targetX;
+          this.path = [];
+          this.x = target[0];
+          this.y = target[1];
           this.state = onArrivedAction;
-          if (onArrivedSpeech) {
-            this.setSpeech(onArrivedSpeech.type, onArrivedSpeech.text, onArrivedSpeech.duration);
-          }
+          if (onArrivedSpeech) this.setSpeech(onArrivedSpeech.type, onArrivedSpeech.text, onArrivedSpeech.duration);
         }
+      }
+
+      get isMoving() {
+        return this.state === 'WALKING' || this.state === 'LEAVING';
       }
 
       update(dt) {
         this.animTimer += dt;
         const now = Date.now();
 
-        // 수명이 만료된 말풍선 자동 정리 (스택 페이드아웃 완료 후 소멸)
-        if (this.speechBubbles && this.speechBubbles.length > 0) {
+        if (this.speechBubbles.length > 0) {
           this.speechBubbles = this.speechBubbles.filter(b => now < b.expiresAt);
         }
 
-        // 안전장치: 정지 상태인데 목적지에 도착하지 못했다면 다시 걸어서 이동 (복도 한가운데 고착 방지)
-        if (this.state !== 'WALKING' && this.state !== 'LEAVING' && this.state !== 'GONE' &&
-            Math.abs(this.targetX - this.x) > 3) {
-          this.onArrivedAction = this.state;
-          this.state = 'WALKING';
-          this.facing = this.targetX > this.x ? 1 : -1;
+        // 안전장치: 정지 상태인데 자리에 도착하지 못했다면 다시 걸어서 이동 (복도 고착 방지)
+        if (!this.isMoving && this.state !== 'GONE') {
+          const t = this.spotFor(this.currentRoom);
+          if (Math.hypot(t[0] - this.x, t[1] - this.y) > 0.3) {
+            this.onArrivedAction = this.state;
+            this.path = this.planPath(this.currentRoom, t);
+            this.state = 'WALKING';
+          }
         }
 
-        // 이동 로직
-        if (this.state === 'WALKING' || this.state === 'LEAVING') {
-          const dx = this.targetX - this.x;
-          if (Math.abs(dx) > 1.5) {
-            this.x += Math.sign(dx) * Math.min(Math.abs(dx), this.speed);
-            if (Math.floor(this.animTimer * 12) % 4 === 0) playSound('step');
-          } else {
-            this.x = this.targetX;
+        // 경로 이동
+        if (this.isMoving) {
+          let budget = this.speed * dt;
+          while (budget > 0 && this.path.length > 0) {
+            const [tx, ty] = this.path[0];
+            const dx = tx - this.x;
+            const dy = ty - this.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist <= budget) {
+              this.x = tx;
+              this.y = ty;
+              budget -= dist;
+              this.path.shift();
+            } else {
+              this.x += (dx / dist) * budget;
+              this.y += (dy / dist) * budget;
+              budget = 0;
+              // 화면상 좌우 방향: 아이소 좌표에서 (dx - dy) 부호
+              const sxDir = dx - dy;
+              if (Math.abs(sxDir) > 0.01) this.facing = sxDir > 0 ? 1 : -1;
+            }
+          }
+          if (Math.floor(this.animTimer * 6) !== Math.floor((this.animTimer - dt) * 6) && Office.playSound) {
+            Office.playSound('step');
+          }
+
+          if (this.path.length === 0) {
             if (this.state === 'LEAVING') {
               this.state = 'GONE';
-              playSound('ding');
+              if (Office.playSound) Office.playSound('ding');
               if (this.id.startsWith('sub_')) {
                 setTimeout(() => {
                   const map = projectAgentsMap.get(this.projectKey);
-                  if (this.state === 'GONE' && map && map.get(this.id) === this) {
-                    map.delete(this.id);
-                  }
+                  if (this.state === 'GONE' && map && map.get(this.id) === this) map.delete(this.id);
                 }, 3000);
               }
             } else {
               this.state = this.onArrivedAction || 'WORKING';
               if (this.onArrivedSpeech) {
-                this.setSpeech(this.onArrivedSpeech.type, this.onArrivedSpeech.text);
+                this.setSpeech(this.onArrivedSpeech.type, this.onArrivedSpeech.text, this.onArrivedSpeech.duration);
                 this.onArrivedSpeech = null;
               }
             }
           }
         }
 
-        // 작업 소리
-        if (this.state === 'WORKING' && Math.random() < 0.03) {
-          playSound('work');
+        if (this.state === 'WORKING' && Math.random() < 0.03 && Office.playSound) {
+          Office.playSound('work');
         }
 
-        // 3.5초 동안 새 이벤트 없이 생각 중이면 PONDERING (턱 괴기)
+        // 3.5초 동안 새 이벤트 없이 생각 중이면 PONDERING
         if (this.state === 'THINKING' && (now - this.lastEventTime > 3500)) {
           this.state = 'PONDERING';
-          if (!this.speechBubble && Math.random() < 0.35) {
-            this.sayRandomMeme();
-          }
+          if (!this.speechBubble && Math.random() < 0.35) this.sayRandomMeme();
         }
 
-        // 장시간(20초 이상) 대기(IDLE) 시 회의실 화이트보드로 걸어가서 로드맵 점검 (회의실 자연스러운 활용)
+        // 장시간 대기 시 회의실로 산책
         if (this.state === 'IDLE' && (now - this.lastEventTime > 20000)) {
           if (!this.lastIdleMeetingWalk || (now - this.lastIdleMeetingWalk > 35000)) {
             this.lastIdleMeetingWalk = now;
             if (this.currentRoom !== 'meeting' && Math.random() < 0.4) {
-              this.moveToRoom('meeting', 'IDLE', {
-                type: 'think',
-                text: '📋 회의실 화이트보드 점검 중',
-                duration: 4200
-              });
+              this.moveToRoom('meeting', 'IDLE', { type: 'think', text: '📋 화이트보드 점검 중', duration: 4200 });
             }
           }
         }
 
-        // ----------------------------------------------------
-        // 에이전트 자율 혼잣말 루프: 클릭하지 않아도 혼자서 8~16초마다 밈/직장인 넋두리 대사 발화
-        // ----------------------------------------------------
+        // 자율 혼잣말
         if (this.state !== 'GONE' && this.state !== 'LEAVING') {
           this.memeTimer = (this.memeTimer || 0) + dt;
           if (this.memeTimer >= (this.nextMemeInterval || 12)) {
             this.memeTimer = 0;
-            this.nextMemeInterval = 9 + Math.random() * 9; // 다음 발화는 9 ~ 18초 뒤
-            // 사용자 질문(ask)이나 에러(error)가 활성화되어 있지 않을 때만 넋두리/밈 발화
-            const hasUrgentBubble = this.speechBubbles && this.speechBubbles.some(b => b.type === 'ask' || b.type === 'error');
-            if (!hasUrgentBubble) {
-              this.sayRandomMeme();
-            }
+            this.nextMemeInterval = 18 + Math.random() * 18;
+            const urgent = this.speechBubbles.some(b => b.type === 'ask' || b.type === 'error');
+            if (!urgent) this.sayRandomMeme();
           }
         }
 
-        // 서브에이전트 무응답 자동 퇴근: 종료 신호가 없는 엔진(Antigravity) 및 비정상 종료 대비
+        // 서브에이전트 무응답 자동 퇴근
         if (this.id.startsWith('sub_') && this.state !== 'GONE' && this.state !== 'LEAVING' &&
             this.activeTools.size === 0 && (now - this.lastEventTime > SUBAGENT_IDLE_LEAVE_MS)) {
           this.leave({ type: 'report', text: '💤 응답 없음, 퇴근합니다', duration: 3500 });
         }
 
-        // ERROR 상태는 5초 후 IDLE로 자동 복귀
+        // ERROR 상태는 5초 후 IDLE 복귀
         if (this.state === 'ERROR' && this.errorStartTime && (now - this.errorStartTime > 5000)) {
           this.state = 'IDLE';
           this.errorStartTime = null;
           this.clearSpeech();
         }
 
-        // 와치독: 도구 결과 없이 N분(기본 10분) 동안 조용하면 "응답 없음 💤" 표시
-        const watchdogMinutes = Office.WATCHDOG_TIMEOUT_MINUTES || 10;
-        const watchdogMs = watchdogMinutes * 60 * 1000;
+        // 와치독: 도구 결과 없이 오래 조용하면 "응답 없음"
+        const watchdogMs = (Office.WATCHDOG_TIMEOUT_MINUTES || 10) * 60 * 1000;
         if (this.activeTools.size > 0 && (now - this.lastToolActivityTime > watchdogMs)) {
           if (!this.speechBubble || !this.speechBubble.text.includes('응답 없음 💤')) {
             this.setSpeech('think', '응답 없음 💤', 30000);
           }
         }
       }
-
-      drawPixels(ctx) {
-        if (this.state === 'GONE') return;
-
-        let prefix = 'antigravity_';
-        if (this.type === 'sub') {
-          prefix = 'sub_';
-        } else if (this.engine === 'claude') {
-          prefix = 'claude_';
-        }
-        let frameKey = `${prefix}idle0`;
-
-        if (this.state === 'WALKING' || this.state === 'LEAVING') {
-          const step = Math.floor(this.animTimer * 8) % 4;
-          frameKey = `${prefix}walk${step}`;
-        } else if (this.state === 'PONDERING') {
-          frameKey = `${prefix}ponder`;
-        } else if (this.state === 'ERROR') {
-          frameKey = `${prefix}sweat`;
-        } else if (this.state === 'REPORTING') {
-          frameKey = `${prefix}report`;
-        } else if (this.state === 'THINKING' || this.state === 'IDLE' || this.state === 'WORKING') {
-          const b = Math.floor(this.animTimer * 2) % 2;
-          frameKey = `${prefix}idle${b}`;
-        }
-
-        const sprite = SPRITE_FRAMES[frameKey] || SPRITE_FRAMES[`${prefix}idle0`];
-
-        ctx.save();
-        const rx = Math.round(this.x);
-        const ry = Math.round(this.y);
-
-        // 1. 발밑 그림자 (타원형 픽셀)
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.beginPath();
-        ctx.ellipse(rx, ry + 1, 8, 3, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 2. 캐릭터 스프라이트 블리팅 (좌우 반전)
-        ctx.translate(rx, ry - 24);
-        if (this.facing < 0) {
-          ctx.scale(-1, 1);
-          ctx.drawImage(sprite, -8, 0);
-        } else {
-          ctx.drawImage(sprite, -8, 0);
-        }
-        ctx.restore();
-      }
-
-      // 960x540 네이티브 해상도에서 칼같이 또렷한 한국어 텍스트 및 말풍선 스택 렌더링
-      drawSharpUI(ctx) {
-        if (this.state === 'GONE') return;
-
-        const displayW = Office.canvasDisplayWidth || 960;
-        const rx = Math.round(this.x * 2);
-        const ry = Math.round(this.y * 2);
-
-        // 1. 캐릭터 이름표 (520px 이상 화면에서만 렌더링하여 모바일 가독성 확보)
-        if (displayW >= 520) {
-          ctx.save();
-          ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif';
-          ctx.textAlign = 'center';
-          // 서브에이전트 이름표는 발밑에 표시하여 같은 방의 메인/DevOps 이름표와 겹치지 않게 함
-          const isSubagent = this.id.startsWith('sub_');
-          const labelY = isSubagent ? ry + 20 : ry - 58;
-          ctx.fillStyle = '#0f172a'; // 외곽 그림자
-          ctx.fillText(this.role, rx + 1, labelY + 1);
-          ctx.fillStyle = isSubagent ? '#7dd3fc' : '#cbd5e1'; // 텍스트 본체
-          ctx.fillText(this.role, rx, labelY);
-          ctx.restore();
-        }
-
-        // 2. 고해상도 픽셀 말풍선 스택 렌더링 (아래에서 위로 쌓이며 차차 페이드아웃)
-        if (this.speechBubbles && this.speechBubbles.length > 0) {
-          this.drawStackedSpeechBubbles(ctx, rx, ry);
-        }
-      }
-
-      drawStackedSpeechBubbles(ctx, rx, ry) {
-        const bubbles = this.speechBubbles;
-        if (!bubbles || bubbles.length === 0) return;
-
-        const now = Date.now();
-        const displayW = Office.canvasDisplayWidth || 960;
-        const isMobile = displayW < 520;
-
-        // 모바일 소형 화면에서는 폰트 가독성을 보장하기 위해 폰트와 높이를 살짝 확대
-        const fontStr = isMobile
-          ? 'bold 13.5px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif'
-          : 'bold 12.5px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif';
-        const bh = isMobile ? 28 : 26;
-        const gap = 5;
-        const maxChars = isMobile ? 26 : 36;
-
-        // 스택 렌더링: newest (index = bubbles.length - 1)가 최하단 (stackIdx = 0)
-        // 이전 말풍선들은 위로 차례대로 쌓임 (stackIdx = 1, 2)
-        const total = bubbles.length;
-        for (let stackIdx = 0; stackIdx < total; stackIdx++) {
-          const bubble = bubbles[total - 1 - stackIdx];
-          if (!bubble) continue;
-
-          // 수명 만료 페이드아웃 계산 (종료 700ms 전부터 부드럽게 감쇄)
-          const remaining = bubble.expiresAt - now;
-          if (remaining <= 0) continue;
-          const fadeAlpha = remaining < 700 ? Math.max(0, remaining / 700) : 1.0;
-
-          // 상위 스택일수록 은은한 투명도 적용 (최하단 최신 1.0 -> 0.85 -> 0.70)
-          const stackBaseAlpha = stackIdx === 0 ? 1.0 : (stackIdx === 1 ? 0.85 : 0.70);
-          const alpha = stackBaseAlpha * fadeAlpha;
-          if (alpha <= 0.02) continue;
-
-          // Y 위치 계산: 최하단은 캐릭터 머리 위(ry - 66), 상위 말풍선은 위로 누적
-          const baseY = Math.max(20 + bh, (ry - 66) - stackIdx * (bh + gap));
-
-          ctx.save();
-          ctx.font = fontStr;
-
-          let text = bubble.text || '';
-          if (text.length > maxChars) {
-            text = text.slice(0, maxChars - 2) + '...';
-          }
-
-          const metrics = ctx.measureText(text);
-          const bw = Math.max(76, Math.min(340, Math.round(metrics.width + 20)));
-
-          let bgHex = '#111827';
-          let borderHex = '#4b5563';
-          let textHex = '#f9fafb';
-
-          if (bubble.type === 'think') {
-            bgHex = '#2b1045'; borderHex = '#a855f7'; textHex = '#f3e8ff';
-          } else if (bubble.type === 'ask') {
-            bgHex = '#3d1603'; borderHex = '#f59e0b'; textHex = '#fef08a';
-          } else if (bubble.type === 'error') {
-            bgHex = '#3b0a0a'; borderHex = '#ef4444'; textHex = '#fecaca';
-          } else if (bubble.type === 'report') {
-            bgHex = '#053e2e'; borderHex = '#10b981'; textHex = '#d1fae5';
-          } else if (bubble.type === 'meme') {
-            bgHex = '#270e2d'; borderHex = '#ec4899'; textHex = '#fdf2f8';
-          } else if (bubble.type === 'work') {
-            bgHex = '#082e26'; borderHex = '#14b8a6'; textHex = '#ccfbf1';
-          }
-
-          let bx = rx;
-          if (bubble.type === 'error' && stackIdx === 0) {
-            bx += (Math.random() - 0.5) * 2;
-          }
-
-          const x = Math.max(10, Math.min(950 - bw, Math.round(bx - bw / 2)));
-          const y = Math.round(baseY - bh);
-
-          ctx.globalAlpha = alpha;
-
-          // 그림자
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-          ctx.fillRect(x + 2, y + 2, bw, bh);
-
-          // 말풍선 본체
-          ctx.fillStyle = bgHex;
-          ctx.fillRect(x, y, bw, bh);
-
-          // 네온 테두리
-          ctx.strokeStyle = borderHex;
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(x + 0.5, y + 0.5, bw - 1, bh - 1);
-
-          // 말풍선 꼬리 (오직 최하단 최신 말풍선만 화자 머리를 향함)
-          if (stackIdx === 0) {
-            const tailX = Math.max(x + 10, Math.min(x + bw - 10, bx));
-            ctx.fillStyle = bgHex;
-            ctx.beginPath();
-            ctx.moveTo(tailX - 4, y + bh - 0.5);
-            ctx.lineTo(tailX, y + bh + 5);
-            ctx.lineTo(tailX + 4, y + bh - 0.5);
-            ctx.fill();
-
-            ctx.strokeStyle = borderHex;
-            ctx.beginPath();
-            ctx.moveTo(tailX - 4, y + bh - 0.5);
-            ctx.lineTo(tailX, y + bh + 5);
-            ctx.lineTo(tailX + 4, y + bh - 0.5);
-            ctx.stroke();
-          }
-
-          // 텍스트 출력
-          ctx.fillStyle = textHex;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(text, x + bw / 2, y + bh / 2);
-
-          ctx.restore();
-        }
-      }
-
-      // 하위 호환용 단일 말풍선 렌더 함수 유지
-      drawSharpSpeechBubble(ctx, bubble, bx, by) {
-        if (!bubble) return;
-        this.drawStackedSpeechBubbles(ctx, bx, by + 66);
-      }
     }
 
-  Office.PixelAgent = PixelAgent;
-  window.PixelAgent = PixelAgent;
+  Office.Agent = Agent;
+  Office.PixelAgent = Agent;
+  window.PixelAgent = Agent;
 
   const SUBAGENT_IDLE_LEAVE_MS = 3 * 60 * 1000;
-  const SUBAGENT_SLOT_OFFSETS = [-14, 14, -22, 22, -7, 7];
 
-  // 서브에이전트 생성: 엘리베이터에서 등장, 기존 팀원과 겹치지 않는 자리 오프셋 배정
+  // 서브에이전트 생성: 엘리베이터에서 등장, 기존 팀원과 겹치지 않는 자리 배정
   function createSubagent(pKey, subId, ev) {
     const map = getProjectAgents(pKey);
     const label = formatSubagentLabel(ev.subagentRole, ev.subagentName);
-    const sub = new PixelAgent(subId, label, 'sub', ev.agentType || 'claude');
+    const sub = new Agent(subId, label, 'sub', ev.agentType || 'claude');
     sub.description = ev.subagentName || null;
     sub.projectKey = pKey || Office.activeProjectKey || 'default';
-    sub.x = ROOM_DEFS.elevator.targetX;
-    sub.targetX = sub.x;
-    sub.currentRoom = 'elevator';
-
     const used = new Set();
     for (const [id, ag] of map.entries()) {
-      if (id.startsWith('sub_') && ag.state !== 'GONE') used.add(ag.slotOffset);
+      if (id.startsWith('sub_') && ag.state !== 'GONE') used.add(ag.slotIndex);
     }
-    sub.slotOffset = SUBAGENT_SLOT_OFFSETS.find(o => !used.has(o)) ?? 0;
+    let slot = 2;
+    while (used.has(slot) && slot < SLOT_VECTORS.length - 1) slot++;
+    sub.slotIndex = slot;
+    const e = ROOM_DEFS.elevator.spot;
+    sub.x = e[0];
+    sub.y = e[1];
+    sub.currentRoom = 'elevator';
     map.set(subId, sub);
     return sub;
   }
 
-  // 캔버스 이름표는 짧게 (에이전트 유형 우선, 없으면 작업 설명)
+  // 이름표는 짧게 (에이전트 유형 우선, 없으면 작업 설명)
   function formatSubagentLabel(role, name) {
     const r = role && role !== '서브에이전트' ? role : '';
     const n = name && name !== 'Subagent' ? name : '';
@@ -674,15 +494,16 @@
 
       // 1. 메인 에이전트 (Antigravity/Claude 메인 엔지니어 - 기획, 코드, 유저 인터랙션 전담)
       const mainRole = engine === 'antigravity' ? 'Antigravity 메인' : 'Claude 메인';
-      const mainAg = new PixelAgent('main', mainRole, 'main', engine);
+      const mainAg = new Agent('main', mainRole, 'main', engine);
       mainAg.projectKey = key;
       map.set('main', mainAg);
 
       // 2. DevOps / 인프라 병렬 처리 에이전트 (서버실 백그라운드 프로세스 및 병렬 도구 전담)
-      const opsAg = new PixelAgent('ops', 'DevOps 엔지니어', 'sub', engine);
+      const opsAg = new Agent('ops', 'DevOps 엔지니어', 'sub', engine);
       opsAg.projectKey = key;
-      opsAg.x = ROOM_DEFS.server.targetX;
-      opsAg.targetX = ROOM_DEFS.server.targetX;
+      const opsSpot = opsAg.spotFor('server');
+      opsAg.x = opsSpot[0];
+      opsAg.y = opsSpot[1];
       opsAg.currentRoom = 'server';
       opsAg.state = 'WORKING';
       map.set('ops', opsAg);

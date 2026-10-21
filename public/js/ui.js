@@ -16,7 +16,7 @@
     playSound
   } = Office;
 
-    // 토큰 미터 패널 UI 갱신 함수 (사용량 정보가 없으면 박스 자체를 숨김)
+    // 토큰 사용량 카드 갱신 (사용량 정보가 없으면 숨김)
     function updateTokenMeterDisplay(usage) {
       const box = document.getElementById('tokenMeterBox');
       if (!box) return;
@@ -26,20 +26,16 @@
         return;
       }
 
-      box.style.display = 'flex';
+      box.style.display = 'block';
       const inEl = document.getElementById('tokenInputVal');
       const outEl = document.getElementById('tokenOutputVal');
       const cacheEl = document.getElementById('tokenCacheVal');
       const totalEl = document.getElementById('tokenTotalVal');
 
-      if (inEl) inEl.innerText = formatTokenCount(usage.inputTokens);
-      if (outEl) outEl.innerText = formatTokenCount(usage.outputTokens);
-      if (cacheEl) cacheEl.innerText = formatTokenCount(usage.cacheTokens);
-      if (totalEl) totalEl.innerText = formatTokenCount(usage.totalTokens);
 
       const modelBadge = document.getElementById('tokenModelBadge');
       if (modelBadge) {
-        modelBadge.innerText = usage.model || 'Standard';
+        modelBadge.innerText = usage.model || '-';
         modelBadge.title = usage.model || '';
       }
 
@@ -47,130 +43,53 @@
       const costVal = document.getElementById('tokenCostVal');
       const cost = calculateEstimatedCost(usage, usage.model);
       if (cost !== null && costRow && costVal) {
-        costRow.style.display = 'flex';
+        costRow.style.display = 'inline';
         costVal.innerText = `$${cost.toFixed(4)}`;
       } else if (costRow) {
         costRow.style.display = 'none';
       }
 
-      // 미니 네온 스파크라인 번레이트 차트 업데이트
-      updateTokenSparkline(Office.activeProjectKey, usage.totalTokens);
+      const total = Math.max(1, (usage.inputTokens || 0) + (usage.outputTokens || 0) + (usage.cacheTokens || 0));
+      const setBar = (id, v) => {
+        const el = document.getElementById(id);
+        if (el) el.style.width = `${Math.max(2, Math.round(((v || 0) / total) * 100))}%`;
+      };
+      setBar('tokenInputBar', usage.inputTokens);
+      setBar('tokenOutputBar', usage.outputTokens);
+      setBar('tokenCacheBar', usage.cacheTokens);
+      if (inEl) inEl.innerText = formatCompactTokenCount(usage.inputTokens);
+      if (outEl) outEl.innerText = formatCompactTokenCount(usage.outputTokens);
+      if (cacheEl) cacheEl.innerText = formatCompactTokenCount(usage.cacheTokens);
+      if (totalEl) {
+        totalEl.innerText = formatCompactTokenCount(usage.totalTokens);
+        totalEl.title = formatTokenCount(usage.totalTokens);
+      }
+      updateBurnRate(Office.activeProjectKey, usage.totalTokens);
     }
 
-    // 세션별 토큰 소모율 미니 네온 스파크라인 그래프
+    // 토큰 소모 속도 (최근 20개 샘플 기준)
     const projectTokenHistory = new Map();
 
-    function updateTokenSparkline(projectKey, totalTokens) {
-      const row = document.getElementById('tokenSparklineRow');
-      const canvas = document.getElementById('tokenSparkline');
+    function updateBurnRate(projectKey, totalTokens) {
       const rateVal = document.getElementById('tokenBurnRateVal');
-      if (!row || !canvas) return;
-
-      if (!totalTokens || totalTokens <= 0) {
-        row.style.display = 'none';
-        return;
-      }
-      row.style.display = 'flex';
-
-      const pKey = projectKey || Office.activeProjectKey || 'default';
-      if (!projectTokenHistory.has(pKey)) {
-        projectTokenHistory.set(pKey, []);
-      }
+      if (!rateVal || !totalTokens) return;
+      const pKey = projectKey || 'default';
+      if (!projectTokenHistory.has(pKey)) projectTokenHistory.set(pKey, []);
       const history = projectTokenHistory.get(pKey);
       const now = Date.now();
-
       const last = history[history.length - 1];
       if (!last || last.total !== totalTokens || (now - last.time >= 3000)) {
         history.push({ time: now, total: totalTokens });
         if (history.length > 20) history.shift();
       }
-
-      let burnRateStr = '0 tok/s';
+      let rate = 0;
       if (history.length >= 2) {
         const first = history[0];
         const latest = history[history.length - 1];
         const dt = (latest.time - first.time) / 1000;
-        const dTokens = latest.total - first.total;
-        if (dt > 0.5 && dTokens >= 0) {
-          const r = Math.round(dTokens / dt);
-          burnRateStr = `${formatTokenCount(r)}/s`;
-        }
+        if (dt > 0.5 && latest.total >= first.total) rate = Math.round((latest.total - first.total) / dt);
       }
-      if (rateVal) rateVal.innerText = burnRateStr;
-
-      const sCtx = canvas.getContext('2d');
-      const W = canvas.width;
-      const H = canvas.height;
-      sCtx.clearRect(0, 0, W, H);
-
-      sCtx.strokeStyle = 'rgba(255,255,255,0.06)';
-      sCtx.lineWidth = 1;
-      sCtx.beginPath();
-      sCtx.moveTo(0, H / 2);
-      sCtx.lineTo(W, H / 2);
-      sCtx.stroke();
-
-      if (history.length === 1) {
-        sCtx.strokeStyle = '#38bdf8';
-        sCtx.lineWidth = 1.5;
-        sCtx.beginPath();
-        sCtx.moveTo(4, H / 2);
-        sCtx.lineTo(W - 4, H / 2);
-        sCtx.stroke();
-
-        sCtx.beginPath();
-        sCtx.arc(W - 4, H / 2, 2.5, 0, Math.PI * 2);
-        sCtx.fillStyle = '#10b981';
-        sCtx.fill();
-        return;
-      }
-
-      const totals = history.map(h => h.total);
-      const minVal = Math.min(...totals);
-      const maxVal = Math.max(...totals);
-      const range = (maxVal === minVal) ? 1 : (maxVal - minVal);
-
-      const padX = 6;
-      const padY = 5;
-      const usableW = W - padX * 2;
-      const usableH = H - padY * 2;
-
-      const points = history.map((h, idx) => {
-        const x = padX + (idx / (history.length - 1)) * usableW;
-        const norm = (h.total - minVal) / range;
-        const y = padY + usableH - norm * usableH;
-        return { x, y };
-      });
-
-      const grad = sCtx.createLinearGradient(0, padY, 0, H);
-      grad.addColorStop(0, 'rgba(56, 189, 248, 0.35)');
-      grad.addColorStop(1, 'rgba(56, 189, 248, 0)');
-
-      sCtx.beginPath();
-      sCtx.moveTo(points[0].x, H);
-      points.forEach(pt => sCtx.lineTo(pt.x, pt.y));
-      sCtx.lineTo(points[points.length - 1].x, H);
-      sCtx.closePath();
-      sCtx.fillStyle = grad;
-      sCtx.fill();
-
-      sCtx.beginPath();
-      points.forEach((pt, idx) => {
-        if (idx === 0) sCtx.moveTo(pt.x, pt.y);
-        else sCtx.lineTo(pt.x, pt.y);
-      });
-      sCtx.strokeStyle = '#38bdf8';
-      sCtx.lineWidth = 1.5;
-      sCtx.stroke();
-
-      const lastPt = points[points.length - 1];
-      sCtx.beginPath();
-      sCtx.arc(lastPt.x, lastPt.y, 2.5, 0, Math.PI * 2);
-      sCtx.fillStyle = '#10b981';
-      sCtx.fill();
-      sCtx.strokeStyle = '#ecfdf5';
-      sCtx.lineWidth = 1;
-      sCtx.stroke();
+      rateVal.innerText = `${formatCompactTokenCount(rate)}/s`;
     }
 
     // H-1. 실시간 알림 관리자 (NotificationManager)
@@ -216,15 +135,16 @@
       updateButtonUI() {
         const btn = document.getElementById('btnToggleNotify');
         const icon = document.getElementById('notifyIcon');
-        const text = document.getElementById('notifyText');
         const isGranted = this.enabled && window.Notification && Notification.permission === 'granted';
         if (icon) {
           icon.innerHTML = isGranted
-            ? '<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>'
-            : '<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"></path><path d="M18.63 13A17.89 17.89 0 0 1 18 8"></path><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"></path><path d="M18 8a6 6 0 0 0-9.33-5"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+            ? '<svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>'
+            : '<svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"></path><path d="M18.63 13A17.89 17.89 0 0 1 18 8"></path><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"></path><path d="M18 8a6 6 0 0 0-9.33-5"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
         }
-        if (text) text.innerText = isGranted ? '알림 켜짐' : '알림 꺼짐';
-        if (btn) btn.style.borderColor = isGranted ? 'rgba(56, 189, 248, 0.4)' : 'rgba(255, 255, 255, 0.08)';
+        if (btn) {
+          btn.classList.toggle('is-on', Boolean(isGranted));
+          btn.title = isGranted ? '데스크톱 알림 켜짐' : '데스크톱 알림 꺼짐';
+        }
       },
 
       handleEvent(ev) {
@@ -370,55 +290,52 @@
 
     NotificationManager.init();
 
-    // 모바일 접이식 섹션 (접기/펼치기 토글 및 키보드 접근성)
-    function initCollapsibleSections() {
-      document.querySelectorAll('.panel-section-toggle').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const isExpanded = btn.getAttribute('aria-expanded') === 'true';
-          btn.setAttribute('aria-expanded', !isExpanded);
-          const contentId = btn.getAttribute('aria-controls');
-          const contentEl = document.getElementById(contentId);
-          if (contentEl) {
-            contentEl.classList.toggle('collapsed', isExpanded);
-          }
-        });
-      });
-    }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initCollapsibleSections);
-    } else {
-      initCollapsibleSections();
-    }
-
-
     // I. 백화점 층별 안내 사이드바 (최고층이 맨 위!)
     // ----------------------------------------------------
     const floorCardElements = new Map();
 
+    function relativeTime(ts) {
+      if (!ts) return '';
+      const diff = Math.max(0, Date.now() - ts);
+      const m = Math.floor(diff / 60000);
+      if (m < 1) return '방금';
+      if (m < 60) return `${m}분 전`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}시간 전`;
+      return `${Math.floor(h / 24)}일 전`;
+    }
+
     function renderFloorCard(card, p, isActive, hasUnread) {
-      const expectedClass = `floor-card ${isActive ? 'active' : ''} ${p.isActive ? 'working' : ''}`;
-      if (card.className !== expectedClass) {
-        card.className = expectedClass;
-      }
+      const cls = ['floor-card'];
+      if (isActive) cls.push('active');
+      if (p.isActive) cls.push('working');
+      if (hasUnread) cls.push('awaiting');
+      const expectedClass = cls.join(' ');
+      if (card.className !== expectedClass) card.className = expectedClass;
       card.setAttribute('aria-selected', isActive ? 'true' : 'false');
-      const engineUpper = (p.engine || 'local').toUpperCase();
-      const newInnerHtml = `
-          <div class="floor-card-top">
-            <div class="floor-badge">
-              <span class="floor-indicator"></span>
-              <span>${escapeHtml(p.floor)}F</span>
-              ${hasUnread ? '<span class="floor-badge-alert" title="내 응답 필요!"><svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></span>' : ''}
-            </div>
-            <span class="floor-tags">
-              ${p.activeSubagents > 0 ? `<span class="floor-sub-tag" title="작업 중인 서브에이전트">+${escapeHtml(p.activeSubagents)} SUB</span>` : ''}
-              <span class="floor-engine-tag">${escapeHtml(engineUpper)}</span>
-            </span>
+
+      const sessions = p.sessions || [];
+      const now = Date.now();
+      const dots = sessions.slice(0, 6).map(sx => {
+        const idle = now - sx.lastActiveTime > 15 * 60 * 1000 ? ' idle' : '';
+        return `<span class="floor-dot ${escapeHtml(sx.engine || '')}${idle}" title="${escapeHtml(sx.engine || '')}"></span>`;
+      }).join('') + (p.activeSubagents > 0 ? '<span class="floor-dot sub" title="서브에이전트"></span>'.repeat(Math.min(3, p.activeSubagents)) : '');
+
+      let badge = '';
+      if (hasUnread) badge = '<span class="floor-badge">💬 답변 대기</span>';
+      else if (p.isActive) badge = '<span class="floor-badge working">● 일하는 중</span>';
+
+      const html = `
+          <span class="floor-num">${escapeHtml(p.floor)}F</span>
+          <div class="floor-info">
+            <div class="floor-title">${escapeHtml(p.projectName)}</div>
+            <div class="floor-meta">세션 ${sessions.length}개 · ${escapeHtml(relativeTime(p.lastActiveTime))}</div>
+            ${badge || `<div class="floor-dots">${dots}</div>`}
           </div>
-          <div class="floor-title">${escapeHtml(p.projectName)}</div>
-          <div class="floor-cwd">${escapeHtml(p.cwd)}</div>
         `;
-      if (card.innerHTML !== newInnerHtml) {
-        card.innerHTML = newInnerHtml;
+      if (card.__html !== html) {
+        card.__html = html;
+        card.innerHTML = html;
       }
     }
 
@@ -509,32 +426,22 @@
       updateFilterCounts(projects);
       updateHotJumpBanner();
 
+      const footer = document.getElementById('buildingFooter');
+      if (footer) footer.innerText = `층 ${projects ? projects.length : 0}개`;
+
       if (!projects || projects.length === 0) {
-        listContainer.innerHTML = `
-          <div style="padding:28px 12px; text-align:center; color:#64748b; font-size:11px; line-height:1.5;">
-            <svg viewBox="0 0 24 24" width="28" height="28" stroke="#475569" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:8px;"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="9" y1="22" x2="9" y2="22.01"></line><line x1="15" y1="22" x2="15" y2="22.01"></line><line x1="9" y1="6" x2="9.01" y2="6"></line><line x1="15" y1="6" x2="15.01" y2="6"></line><line x1="9" y1="10" x2="9.01" y2="10"></line><line x1="15" y1="10" x2="15.01" y2="10"></line><line x1="9" y1="14" x2="9.01" y2="14"></line><line x1="15" y1="14" x2="15.01" y2="14"></line><line x1="9" y1="18" x2="9.01" y2="18"></line><line x1="15" y1="18" x2="15.01" y2="18"></line></svg>
-            <div style="font-weight:700; color:#94a3b8; margin-bottom:4px;">감지된 활성 세션 없음</div>
-            <div>Claude Code 또는 Antigravity CLI 세션을 실행하면 자동으로 워크스페이스가 감지됩니다.</div>
-          </div>
-        `;
+        listContainer.innerHTML = '<div class="floor-empty"><b>아직 입주한 층이 없어요</b>Claude Code나 Antigravity 세션을 실행하면 자동으로 층이 생겨요.</div>';
         return;
       }
 
       const visibleProjects = filterProjects(projects);
 
       if (visibleProjects.length === 0) {
-        listContainer.innerHTML = `
-          <div style="padding:28px 12px; text-align:center; color:#64748b; font-size:11px; line-height:1.5;">
-            <svg viewBox="0 0 24 24" width="24" height="24" stroke="#475569" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <div style="font-weight:700; color:#94a3b8; margin-bottom:4px;">일치하는 워크스페이스 없음</div>
-            <div>검색어나 필터 조건을 변경해보세요.</div>
-          </div>
-        `;
+        listContainer.innerHTML = '<div class="floor-empty"><b>찾는 층이 없어요</b>검색어나 필터를 바꿔 보세요.</div>';
         return;
       } else {
-        // 일치하지 않는 메시지가 남아있다면 제거
-        const emptyMsg = listContainer.querySelector('div:not(.floor-card)');
-        if (emptyMsg) listContainer.innerHTML = '';
+        const emptyMsg = listContainer.querySelector('.floor-empty');
+        if (emptyMsg) emptyMsg.remove();
       }
 
       const activeKeys = new Set();
@@ -601,6 +508,7 @@
       } else if (activeProjectKey) {
         const p = projects.find(x => x.projectKey === activeProjectKey);
         if (p) {
+          renderFloorHeader(p);
           currentProjectTokenUsage = p.tokenUsage || null;
           updateTokenMeterDisplay(currentProjectTokenUsage);
         }
@@ -613,17 +521,10 @@
       feed.innerHTML = '';
       const logs = (Office.projectLogsMap && Office.projectLogsMap.get(pKey)) || [];
       if (logs.length === 0) {
-        const item = document.createElement('div');
-        item.className = 'log-item';
-        item.classList.add('k-system');
-        item.innerHTML = `<span class="log-time">${new Date().toTimeString().split(' ')[0]}</span><span class="log-tag">READY</span><span class="log-msg">이 층의 새로운 에이전트 이벤트를 대기하고 있습니다.</span>`;
-        feed.appendChild(item);
+        feed.innerHTML = '<div class="log-empty">아직 기록이 없어요. 이 층에서 Claude나 Antigravity가 움직이면 여기에 쌓여요.</div>';
         return;
       }
-      for (const ev of logs) {
-        appendLog(ev, false);
-      }
-      feed.scrollTop = feed.scrollHeight;
+      for (const ev of logs) appendLog(ev);
     }
 
     function resetStatusDisplayToIdle() {
@@ -634,8 +535,30 @@
         badge.innerText = '대기 중';
       }
       if (detail) {
-        detail.innerHTML = '<div class="status-empty">최근 활동이 없습니다. 에이전트가 작업을 시작하면 여기에 표시됩니다.</div>';
+        detail.innerHTML = '<div class="status-empty">최근 활동이 없습니다.</div>';
       }
+    }
+
+    function renderFloorHeader(p) {
+      const set = (id, v, title) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerText = v;
+        if (title !== undefined) el.title = title;
+      };
+      const sessions = p.sessions || [];
+      const latest = sessions.slice().sort((a, b) => b.lastActiveTime - a.lastActiveTime)[0];
+      const engine = (p.engine || 'local').toLowerCase();
+      set('currentFloorTag', `${p.floor}F`);
+      set('currentProjectTitle', p.projectName, p.projectName);
+      set('currentSessionSubtitle', p.cwd, p.cwd);
+      set('sessionPill', `세션 ${sessions.length}개`);
+      set('currentEngineTag', engine === 'claude' ? 'Claude' : (engine === 'antigravity' ? 'Antigravity' : engine));
+      const enginePill = document.getElementById('currentEngineTag');
+      if (enginePill) enginePill.className = `engine-pill ${engine}`;
+      set('journalFolder', p.cwd, p.cwd);
+      set('journalSession', latest ? latest.sessionId.slice(0, 8) : '-', latest ? latest.sessionId : '');
+      set('journalEngine', engine === 'claude' ? 'Claude Code' : (engine === 'antigravity' ? 'Antigravity CLI' : engine));
     }
 
     function selectProject(pKey) {
@@ -650,10 +573,7 @@
 
       const p = projectsList.find(x => x.projectKey === pKey);
       if (p) {
-        document.getElementById('currentFloorTag').innerText = `${p.floor}F`;
-        document.getElementById('currentProjectTitle').innerText = p.projectName;
-        document.getElementById('currentSessionSubtitle').innerText = p.cwd;
-        document.getElementById('currentEngineTag').innerText = (p.engine || 'LOCAL').toUpperCase();
+        renderFloorHeader(p);
         currentProjectTokenUsage = p.tokenUsage || null;
         updateTokenMeterDisplay(currentProjectTokenUsage);
       } else {
@@ -772,14 +692,15 @@
       const feed = document.getElementById('eventLogFeed');
       if (!feed || !ev) return;
 
-      const isScrolledToBottom = (feed.scrollHeight - feed.scrollTop - feed.clientHeight) < 40;
+      const empty = feed.querySelector('.log-empty');
+      if (empty) empty.remove();
 
       const kind = ev.isError ? { label: 'ERROR', cls: 'k-error' } : (LOG_KINDS[ev.action] || { label: (ev.action || 'EVENT').toUpperCase(), cls: 'k-system' });
       const item = document.createElement('div');
       item.className = `log-item ${kind.cls}`;
       const isSubagentEvent = typeof ev.agentId === 'string' && ev.agentId.startsWith('sub_');
 
-      const timeStr = new Date(ev.timestamp || Date.now()).toTimeString().split(' ')[0];
+      const timeStr = new Date(ev.timestamp || Date.now()).toTimeString().slice(0, 5);
       const detailObj = (ev.action === 'tool_start') ? extractTaskDetail(ev.room || 'research', ev.toolName, ev.toolArgs, ev.toolSummary) : null;
       const msgStr = (detailObj ? `${detailObj.prefix}${detailObj.text}` : (ev.toolSummary || ev.thinkingText || ev.questionText || ev.errorSummary || ev.resultSummary || ev.userPrompt || ev.subagentName || '이벤트'))
         .replace(/\s+/g, ' ').trim();
@@ -806,13 +727,10 @@
       msgSpan.textContent = msgStr;
       msgSpan.title = msgStr;
       item.appendChild(msgSpan);
-      feed.appendChild(item);
+      feed.insertBefore(item, feed.firstChild);
 
-      while (feed.children.length > 80) feed.removeChild(feed.firstChild);
-
-      if (!smartScroll || isScrolledToBottom) {
-        feed.scrollTop = feed.scrollHeight;
-      }
+      while (feed.children.length > 80) feed.removeChild(feed.lastChild);
+      void smartScroll;
     }
 
     // ----------------------------------------------------
@@ -969,39 +887,6 @@
         }
       });
 
-      const canvas = document.getElementById('officeCanvas');
-      if (canvas) {
-        canvas.addEventListener('click', (e) => {
-          const rect = canvas.getBoundingClientRect();
-          const scaleX = 480 / rect.width;
-          const scaleY = 270 / rect.height;
-          const clickX = (e.clientX - rect.left) * scaleX;
-          const clickY = (e.clientY - rect.top) * scaleY;
-
-          // 캐릭터 직접 클릭 감지 (반경 18px x 24px) -> 재미있는 밈 대사 즉시 출력
-          const currentAgents = Office.getProjectAgents ? Office.getProjectAgents(Office.activeProjectKey) : null;
-          if (currentAgents) {
-            for (const [_, ag] of currentAgents.entries()) {
-              if (ag.state !== 'GONE' && Math.abs(ag.x - clickX) <= 18 && Math.abs(ag.y - 12 - clickY) <= 24) {
-                if (typeof ag.sayRandomMeme === 'function') {
-                  ag.sayRandomMeme();
-                  return;
-                }
-              }
-            }
-          }
-
-          const { ROOM_DEFS } = Office;
-          if (!ROOM_DEFS) return;
-          for (const rId in ROOM_DEFS) {
-            const def = ROOM_DEFS[rId];
-            if (clickX >= def.x && clickX <= def.x + def.w) {
-              openRoomInspector(rId);
-              break;
-            }
-          }
-        });
-      }
     }
 
     if (document.readyState === 'loading') {
@@ -1136,11 +1021,11 @@
         elevator: '엘리베이터 (세션 진입)'
       };
 
-      const roomStates = Office.roomTaskStates || {};
+      const roomStates = Office.getProjectTaskStates ? Office.getProjectTaskStates(pKey) : {};
       let hasRoomData = false;
       for (const [rId, name] of Object.entries(roomNames)) {
         const st = roomStates[rId];
-        if (st && (st.taskText || st.currentSummary || (st.history && st.history.length > 0))) {
+        if (st && (st.text || st.currentSummary || (st.history && st.history.length > 0))) {
           hasRoomData = true;
           report += `#### ${name}\n`;
           if (st.currentSummary) {
@@ -1151,8 +1036,8 @@
           }
           if (st.history && st.history.length > 0) {
             report += `- **최근 작업 이력** (${st.history.length}건):\n`;
-            st.history.slice(-5).forEach(h => {
-              report += `  - [${h.time}] \`${h.tool}\` ${h.summary || ''}\n`;
+            st.history.slice(0, 5).forEach(h => {
+              report += `  - [${h.time}] \`${h.toolName || '-'}\` ${h.detailText || h.summary || ''}\n`;
             });
           }
           report += `\n`;
@@ -1170,7 +1055,7 @@
         if (btn) {
           btn.classList.add('btn-copied');
           const origHtml = btn.innerHTML;
-          btn.innerHTML = `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> <span class="btn-action-text">복사 완료</span>`;
+          btn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> <span class="btn-action-text">복사 완료</span>`;
           setTimeout(() => {
             btn.classList.remove('btn-copied');
             btn.innerHTML = origHtml;
@@ -1191,135 +1076,128 @@
       }
     }
 
-    // 레트로 CRT 스캔라인 화면 모드 토글
-    function initCrtMode() {
-      const btn = document.getElementById('btnToggleCrt');
-      const wrapper = document.querySelector('.canvas-wrapper');
-      const crtText = document.getElementById('crtStatusText');
-      if (!btn || !wrapper) return;
-
-      let isCrt = localStorage.getItem('agent_office_crt') === '1';
-
-      function applyCrt(active) {
-        if (active) {
-          wrapper.classList.add('crt-active');
-          btn.classList.add('crt-active');
-          if (crtText) crtText.innerText = 'CRT ON';
-          btn.title = '레트로 CRT 모드 켜짐 (클릭 시 끄기)';
-        } else {
-          wrapper.classList.remove('crt-active');
-          btn.classList.remove('crt-active');
-          if (crtText) crtText.innerText = 'CRT OFF';
-          btn.title = '레트로 CRT 모드 꺼짐 (클릭 시 켜기)';
-        }
-      }
-
-      applyCrt(isCrt);
-
-      function toggleCrt() {
-        isCrt = !isCrt;
-        localStorage.setItem('agent_office_crt', isCrt ? '1' : '0');
-        applyCrt(isCrt);
-        if (Office.playSound) Office.playSound('work');
-        showToast(isCrt ? 'CRT 스캔라인 모드가 켜졌습니다.' : 'CRT 모드가 꺼졌습니다.');
-      }
-
-      btn.onclick = toggleCrt;
-    }
-
-    // VS Code 스타일 라이브 스트림 하단 패널 리사이저 (드래그 조절 & 로컬 저장 & 더블 클릭 복원)
-    function initPanelResizer() {
-      const resizer = document.getElementById('panelResizer');
-      const panel = document.getElementById('bottomPanel');
-      if (!resizer || !panel) return;
-
-      const DEFAULT_HEIGHT = 210;
-      const MIN_HEIGHT = 80;
-      const STORAGE_KEY = 'agent_office_panel_height';
-
-      // 저장된 사용자 지정 패널 높이 복원
-      const savedHeight = parseInt(localStorage.getItem(STORAGE_KEY), 10);
-      if (!isNaN(savedHeight) && savedHeight >= MIN_HEIGHT && window.innerWidth >= 700) {
-        panel.style.height = `${savedHeight}px`;
-      }
-
-      let isDragging = false;
-      let startY = 0;
-      let startHeight = DEFAULT_HEIGHT;
-
-      function onPointerDown(e) {
-        if (window.innerWidth < 700) return;
-        isDragging = true;
-        startY = e.clientY;
-        startHeight = panel.offsetHeight;
-        resizer.classList.add('is-resizing');
-        document.body.style.cursor = 'row-resize';
-        document.body.style.userSelect = 'none';
-
-        window.addEventListener('pointermove', onPointerMove);
-        window.addEventListener('pointerup', onPointerUp);
-        window.addEventListener('pointercancel', onPointerUp);
-      }
-
-      function onPointerMove(e) {
-        if (!isDragging) return;
-        const delta = startY - e.clientY;
-        const maxHeight = Math.round(window.innerHeight * 0.72);
-        const newHeight = Math.min(Math.max(startHeight + delta, MIN_HEIGHT), maxHeight);
-        panel.style.height = `${newHeight}px`;
-        localStorage.setItem(STORAGE_KEY, newHeight);
-
-        if (typeof window.updateCanvasBufferSize === 'function') {
-          window.updateCanvasBufferSize();
-        }
-      }
-
-      function onPointerUp() {
-        if (!isDragging) return;
-        isDragging = false;
-        resizer.classList.remove('is-resizing');
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-
-        window.removeEventListener('pointermove', onPointerMove);
-        window.removeEventListener('pointerup', onPointerUp);
-        window.removeEventListener('pointercancel', onPointerUp);
-
-        if (typeof window.updateCanvasBufferSize === 'function') {
-          window.updateCanvasBufferSize();
-        }
-      }
-
-      resizer.addEventListener('pointerdown', onPointerDown);
-
-      // 더블 클릭 시 VS Code처럼 기본 크기(210px)로 즉시 복원
-      resizer.addEventListener('dblclick', () => {
-        panel.style.height = `${DEFAULT_HEIGHT}px`;
-        localStorage.setItem(STORAGE_KEY, DEFAULT_HEIGHT);
-        if (typeof window.updateCanvasBufferSize === 'function') {
-          window.updateCanvasBufferSize();
-        }
-        if (Office.playSound) Office.playSound('ding');
-        showToast('하단 패널 높이가 기본 크기(210px)로 초기화되었습니다.');
-      });
-    }
-
     initReportExport();
-    initCrtMode();
-    initPanelResizer();
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        initSearchAndFilter();
-        initReportExport();
-        initCrtMode();
-        initPanelResizer();
-      });
+      document.addEventListener('DOMContentLoaded', initSearchAndFilter);
     } else {
       initSearchAndFilter();
     }
 
 
+    // ----------------------------------------------------
+    // 에이전트 카드 (현재 층 메인 에이전트의 상태 요약)
+    // ----------------------------------------------------
+    const AVATAR_STYLE = {
+      claude: { shirt: '#d97757', hair: '#5b3a29', bg: '#fff1ea' },
+      antigravity: { shirt: '#38a3e8', hair: '#1e293b', bg: '#e8f4fd' }
+    };
+
+    function describeAgentState(ag) {
+      const room = (Office.ROOM_DEFS[ag.currentRoom] || {}).name || '';
+      switch (ag.state) {
+        case 'WALKING': return { text: `${room}(으)로 가는 중`, cls: 's-walking' };
+        case 'WORKING': return { text: `${room}에서 일하는 중`, cls: 's-working' };
+        case 'THINKING':
+        case 'PONDERING': return { text: `${room}에서 생각 중`, cls: '' };
+        case 'ASKING': return { text: `${room}에서 답 기다리는 중`, cls: 's-asking' };
+        case 'REPORTING': return { text: '보고 완료 · 다음 지시 대기', cls: 's-asking' };
+        case 'ERROR': return { text: '오류 확인 중', cls: 's-error' };
+        case 'LEAVING': return { text: '퇴근하는 중', cls: 's-walking' };
+        case 'GONE': return { text: '퇴근함', cls: '' };
+        default: return { text: '대기 중', cls: '' };
+      }
+    }
+
+    function formatDuration(ms) {
+      const m = Math.floor(ms / 60000);
+      if (m < 1) return '방금 출근';
+      if (m < 60) return `${m}분째 근무`;
+      const h = Math.floor(m / 60);
+      return `${h}시간 ${m % 60}분째 근무`;
+    }
+
+    function updateAgentCard() {
+      const agents = Office.getProjectAgents ? Office.getProjectAgents(Office.activeProjectKey) : null;
+      if (!agents) return;
+      const main = agents.get('main');
+      if (!main) return;
+
+      const style = AVATAR_STYLE[main.engine] || AVATAR_STYLE.antigravity;
+      const avatar = document.getElementById('agentAvatar');
+      if (avatar) {
+        avatar.style.background = style.bg;
+        avatar.style.setProperty('--avatar-shirt', style.shirt);
+        avatar.style.setProperty('--avatar-hair', style.hair);
+      }
+      const nameEl = document.getElementById('agentName');
+      if (nameEl) nameEl.innerText = main.role;
+
+      const st = describeAgentState(main);
+      const pill = document.getElementById('agentStatusPill');
+      if (pill) {
+        pill.innerText = st.text;
+        pill.className = `agent-status ${st.cls}`;
+      }
+
+      let tools = 0;
+      for (const ag of agents.values()) tools += ag.toolCount || 0;
+      const first = Office.projectFirstEventTime ? Office.projectFirstEventTime.get(Office.activeProjectKey) : null;
+      const meta = document.getElementById('agentMeta');
+      if (meta) meta.innerText = `도구 ${tools}회 · ${first ? formatDuration(Date.now() - first) : '대기 중'}`;
+
+      const team = document.getElementById('agentTeam');
+      if (team) {
+        const chips = [];
+        for (const ag of agents.values()) {
+          if (ag.id === 'main' || ag.state === 'GONE') continue;
+          const on = ag.state === 'WORKING' || ag.isMoving;
+          chips.push(`<span class="team-chip${on ? ' on' : ''}" title="${escapeHtml(describeAgentState(ag).text)}">${escapeHtml(ag.role)}</span>`);
+        }
+        const html = chips.join('');
+        if (team.__html !== html) {
+          team.__html = html;
+          team.innerHTML = html;
+        }
+      }
+    }
+    setInterval(updateAgentCard, 500);
+
+    // ----------------------------------------------------
+    // 사무실 도구 버튼 (확대/축소/맞춤/낮밤)
+    // ----------------------------------------------------
+    const ICON_MOON = '<svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
+    const ICON_SUN = '<svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"></circle><line x1="12" y1="2" x2="12" y2="4"></line><line x1="12" y1="20" x2="12" y2="22"></line><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"></line><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"></line><line x1="2" y1="12" x2="4" y2="12"></line><line x1="20" y1="12" x2="22" y2="12"></line><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"></line><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"></line></svg>';
+
+    function updateNightButton() {
+      const btn = document.getElementById('btnNight');
+      const icon = document.getElementById('nightIcon');
+      const night = Office.Iso && Office.Iso.isNight();
+      if (icon) icon.innerHTML = night ? ICON_MOON : ICON_SUN;
+      if (btn) {
+        btn.classList.toggle('is-night', Boolean(night));
+        btn.title = night ? '밤 (클릭하면 낮으로)' : '낮 (클릭하면 밤으로)';
+      }
+    }
+
+    function initStageTools() {
+      const on = (id, fn) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', fn);
+      };
+      on('btnZoomIn', () => Office.Iso && Office.Iso.zoomIn());
+      on('btnZoomOut', () => Office.Iso && Office.Iso.zoomOut());
+      on('btnFit', () => Office.Iso && Office.Iso.fit());
+      on('btnNight', () => {
+        if (!Office.Iso) return;
+        Office.Iso.toggleNight();
+        updateNightButton();
+      });
+      updateNightButton();
+    }
+
   Object.assign(Office, {
+    initStageTools,
+    updateNightButton,
     updateTokenMeterDisplay,
     NotificationManager,
     updateFloorsList,
@@ -1333,7 +1211,7 @@
     appendLog,
     showToast,
     exportSessionMarkdownReport,
-    updateTokenSparkline
+    updateAgentCard
   });
 
   window.updateTokenMeterDisplay = updateTokenMeterDisplay;
@@ -1349,6 +1227,5 @@
   window.appendLog = appendLog;
   window.showToast = showToast;
   window.exportSessionMarkdownReport = exportSessionMarkdownReport;
-  window.updateTokenSparkline = updateTokenSparkline;
 
 })(window);
