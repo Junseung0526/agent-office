@@ -132,6 +132,34 @@
   requestAnimationFrame(renderLoop);
 
 
+    // 도구 호출 ID -> 담당 에이전트 기록 (tool_end를 시작한 에이전트에게 귀속)
+    const toolOwners = new Map();
+    function rememberToolOwner(pKey, toolKey, agentId) {
+      if (!toolKey) return;
+      toolOwners.set(`${pKey}|${toolKey}`, agentId);
+      if (toolOwners.size > 500) toolOwners.delete(toolOwners.keys().next().value);
+    }
+    function takeToolOwner(pKey, toolKey) {
+      if (!toolKey) return null;
+      const k = `${pKey}|${toolKey}`;
+      const id = toolOwners.get(k);
+      toolOwners.delete(k);
+      return id || null;
+    }
+
+    // 도구 ID가 없는 결과(Antigravity)는 가장 오래 실행 중인 도구를 가진 에이전트에게 귀속
+    function oldestBusyAgent(agents) {
+      let best = null;
+      let bestTime = Infinity;
+      for (const ag of agents) {
+        if (!ag) continue;
+        for (const t of ag.activeTools.values()) {
+          if (t.startTime < bestTime) { bestTime = t.startTime; best = ag; }
+        }
+      }
+      return best;
+    }
+
     function handleEvent(ev) {
       if (!ev) return;
       const pKey = ev.projectKey || Office.activeProjectKey || 'default';
@@ -164,30 +192,42 @@
 
       // 이벤트 대상 프로젝트의 에이전트 맵 조회 (메인 & DevOps 병렬 협업 체제)
       const targetAgents = getProjectAgents(pKey);
-      let targetAgent = targetAgents.get(ev.agentId);
-      if (!targetAgent) {
-        if (ev.agentId && ev.agentId.startsWith('sub_')) {
+      let targetAgent = null;
+
+      if (ev.agentId && ev.agentId.startsWith('sub_')) {
+        targetAgent = targetAgents.get(ev.agentId);
+        if (!targetAgent) {
           // 이미 퇴근 처리된 서브에이전트의 늦은 종료 이벤트로 다시 출근시키지 않음
           if (ev.action === 'subagent_finish') return;
           // 재접속 리플레이에서는 출근 이벤트가 아닌 한 서브에이전트를 새로 만들지 않음 (퇴근한 팀원 재등장 방지)
           if (ev.replay && ev.action !== 'subagent_spawn') return;
           targetAgent = createSubagent(pKey, ev.agentId, ev);
-        } else {
-          // 멀티 에이전트 병렬 협업 동적 분담:
-          // 1) 서버실/터미널/명령어 도구는 ops(DevOps 엔지니어)가 전담 수행
-          // 2) 또는 메인 에이전트가 다른 방에서 작업 중(WORKING)일 때 새 도구가 시작되면 ops가 병렬 지원
-          const mainAg = targetAgents.get('main');
-          const opsAg = targetAgents.get('ops');
-          if (ev.action === 'tool_start') {
-            if (ev.room === 'server' && opsAg) {
-              targetAgent = opsAg;
-            } else if (mainAg && mainAg.state === 'WORKING' && mainAg.currentRoom !== ev.room && opsAg) {
-              targetAgent = opsAg;
-            } else {
-              targetAgent = mainAg;
-            }
+        }
+      } else {
+        // 메인 세션 이벤트는 메인과 DevOps가 나눠 처리:
+        // 1) 서버실(터미널/명령어) 도구는 DevOps 전담
+        // 2) 메인이 다른 방에서 도구 실행 중일 때 들어온 병렬 도구는 DevOps가 지원 (DevOps가 한가할 때)
+        // 3) tool_end는 해당 도구를 시작한 에이전트에게 전달
+        const mainAg = targetAgents.get('main');
+        const opsAg = targetAgents.get('ops');
+        if (ev.action === 'tool_start') {
+          const mainBusy = mainAg && mainAg.activeTools.size > 0 && mainAg.currentRoom !== ev.room;
+          const opsFree = opsAg && opsAg.activeTools.size === 0;
+          if (opsAg && (ev.room === 'server' || (mainBusy && opsFree))) {
+            targetAgent = opsAg;
           } else {
             targetAgent = mainAg;
+          }
+          rememberToolOwner(pKey, ev.toolUseId, targetAgent.id);
+        } else if (ev.action === 'tool_end') {
+          const ownerId = ev.toolUseId ? takeToolOwner(pKey, ev.toolUseId) : null;
+          targetAgent = (ownerId && targetAgents.get(ownerId)) || oldestBusyAgent([mainAg, opsAg]) || mainAg;
+        } else {
+          targetAgent = mainAg;
+          // 턴 경계에서는 DevOps의 미완료 도구도 정리 (서버실 복귀)
+          if (opsAg && (ev.action === 'turn_finish' || ev.action === 'user_input') && opsAg.activeTools.size > 0) {
+            opsAg.activeTools.clear();
+            opsAg.moveToRoom('server', 'WORKING');
           }
         }
       }
@@ -240,10 +280,11 @@
           setRoomTaskEnd(pKey, ev.room || 'dev');
 
           // 병렬 도구 목록에서 완료된 도구 제거
-          const toolKey = ev.toolUseId || ev.id;
+          const toolKey = ev.toolUseId;
           if (toolKey && targetAgent.activeTools.has(toolKey)) {
             targetAgent.activeTools.delete(toolKey);
-          } else if (targetAgent.activeTools.size > 0) {
+          } else if (!toolKey && targetAgent.activeTools.size > 0) {
+            // 도구 ID가 없는 엔진만 가장 오래된 도구를 완료 처리
             const firstKey = targetAgent.activeTools.keys().next().value;
             targetAgent.activeTools.delete(firstKey);
           }
